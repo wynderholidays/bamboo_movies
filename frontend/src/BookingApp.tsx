@@ -136,8 +136,20 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         console.log('Navigating to payment page...');
         console.log('Current route before navigation:', currentRoute);
         console.log('Target route:', `/payment/${selectedShowtimeId}`);
+        
+        // Try navigate first
         navigate(`/payment/${selectedShowtimeId}`);
-        console.log('Navigation called, checking if route changed...');
+        
+        // Fallback: Force navigation with window.location
+        setTimeout(() => {
+          console.log('Checking if navigation worked...');
+          if (window.location.pathname === `/booking/${selectedShowtimeId}`) {
+            console.log('Navigation failed, using window.location.href');
+            window.location.href = `/payment/${selectedShowtimeId}`;
+          } else {
+            console.log('Navigation successful');
+          }
+        }, 100);
       } else {
         const error = await response.json();
         console.error('Booking failed:', error);
