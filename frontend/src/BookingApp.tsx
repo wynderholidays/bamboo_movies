@@ -50,50 +50,63 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
   const [showPaymentOTP, setShowPaymentOTP] = useState(false);
   const [paymentOtp, setPaymentOtp] = useState('');
   const [isBooking, setIsBooking] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [userId] = useState(() => Math.random().toString(36).substr(2, 9));
 
   useEffect(() => {
-    // Restore selectedShowtimeId from sessionStorage if not provided
-    if (!selectedShowtimeId && (currentRoute.includes('/payment') || currentRoute.includes('/success'))) {
-      const storedShowtimeId = sessionStorage.getItem('selectedShowtimeId');
-      if (storedShowtimeId) {
-        console.log('Restoring selectedShowtimeId from sessionStorage:', storedShowtimeId);
-        setSelectedShowtimeId(parseInt(storedShowtimeId));
+    const initializePage = async () => {
+      setIsLoading(true);
+      
+      // Restore selectedShowtimeId from sessionStorage if not provided
+      let currentShowtimeId = selectedShowtimeId;
+      if (!currentShowtimeId && (currentRoute.includes('/payment') || currentRoute.includes('/success'))) {
+        const storedShowtimeId = sessionStorage.getItem('selectedShowtimeId');
+        if (storedShowtimeId) {
+          console.log('Restoring selectedShowtimeId from sessionStorage:', storedShowtimeId);
+          currentShowtimeId = parseInt(storedShowtimeId);
+          setSelectedShowtimeId(currentShowtimeId);
+        }
       }
-    }
+      
+      // Restore booking data from sessionStorage if on payment or success page
+      if (currentRoute.includes('/payment') || currentRoute.includes('/success')) {
+        const storedBooking = sessionStorage.getItem('bookingResponse');
+        const storedCustomer = sessionStorage.getItem('customerInfo');
+        const storedSeats = sessionStorage.getItem('selectedSeats');
+        
+        if (storedBooking && !bookingResponse) {
+          console.log('Restoring booking data from sessionStorage');
+          setBookingResponse(JSON.parse(storedBooking));
+        }
+        
+        if (storedCustomer && (!customerInfo.email || !customerInfo.name)) {
+          console.log('Restoring customer data from sessionStorage');
+          setCustomerInfo(JSON.parse(storedCustomer));
+        }
+        
+        if (storedSeats && selectedSeats.length === 0) {
+          console.log('Restoring selected seats from sessionStorage');
+          setSelectedSeats(JSON.parse(storedSeats));
+        }
+      }
+      
+      // Fetch theater info if we have showtime ID
+      if (currentShowtimeId) {
+        await fetchTheaterInfo(currentShowtimeId);
+      }
+      
+      setIsLoading(false);
+    };
     
-    if (selectedShowtimeId) {
-      fetchTheaterInfo();
-    }
-    
-    // Restore booking data from sessionStorage if on payment or success page
-    if (currentRoute.includes('/payment') || currentRoute.includes('/success')) {
-      const storedBooking = sessionStorage.getItem('bookingResponse');
-      const storedCustomer = sessionStorage.getItem('customerInfo');
-      const storedSeats = sessionStorage.getItem('selectedSeats');
-      
-      if (storedBooking && !bookingResponse) {
-        console.log('Restoring booking data from sessionStorage');
-        setBookingResponse(JSON.parse(storedBooking));
-      }
-      
-      if (storedCustomer && (!customerInfo.email || !customerInfo.name)) {
-        console.log('Restoring customer data from sessionStorage');
-        setCustomerInfo(JSON.parse(storedCustomer));
-      }
-      
-      if (storedSeats && selectedSeats.length === 0) {
-        console.log('Restoring selected seats from sessionStorage');
-        setSelectedSeats(JSON.parse(storedSeats));
-      }
-    }
-  }, [selectedShowtimeId, currentRoute]);
+    initializePage();
+  }, [currentRoute]);
 
-  const fetchTheaterInfo = async () => {
-    if (!selectedShowtimeId) return;
+  const fetchTheaterInfo = async (showtimeId?: number) => {
+    const id = showtimeId || selectedShowtimeId;
+    if (!id) return;
     
     try {
-      const response = await fetch(`/api/showtime/${selectedShowtimeId}`);
+      const response = await fetch(`/api/showtime/${id}`);
       const data = await response.json();
       setTheaterInfo(data);
     } catch (error) {
@@ -293,7 +306,9 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     }
   };
 
-  if (!selectedShowtimeId) {
+  if (isLoading) return <div>Loading...</div>;
+  
+  if (!selectedShowtimeId && !currentRoute.includes('/success')) {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
         <h2>No showtime selected</h2>
@@ -304,7 +319,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     );
   }
   
-  if (!theaterInfo) return <div>Loading showtime info...</div>;
+  if (!theaterInfo && !currentRoute.includes('/success')) return <div>Loading showtime info...</div>;
 
   return (
     <div className="App">
