@@ -492,12 +492,27 @@ def admin_login(credentials: AdminLogin):
     
     return {"access_token": token, "token_type": "bearer", "expires_in": JWT_EXPIRATION_HOURS * 3600}
 
+@app.post("/admin/logout")
+def admin_logout(admin: dict = Depends(get_current_admin)):
+    """Logout admin user"""
+    logger.info(f"Admin logout: {admin['username']}")
+    return {"message": "Logged out successfully"}
+
+@app.get("/admin/me")
+def get_admin_info(admin: dict = Depends(get_current_admin)):
+    """Get current admin user info"""
+    return {"username": admin['username'], "exp": admin['exp']}
+
 def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Verify admin JWT token"""
-    payload = verify_jwt_token(credentials.credentials)
-    if payload['username'] != ADMIN_USERNAME:
-        raise HTTPException(status_code=401, detail="Invalid user")
-    return payload
+    try:
+        payload = verify_jwt_token(credentials.credentials)
+        if payload['username'] != ADMIN_USERNAME:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        return payload
+    except Exception as e:
+        logger.error(f"Authentication failed: {str(e)}")
+        raise HTTPException(status_code=401, detail="Authentication required")
 
 @app.get("/bookings")
 def get_all_bookings_endpoint(admin: dict = Depends(get_current_admin)):
@@ -607,7 +622,7 @@ def verify_payment_otp(request: OTPVerification):
     return {"message": "Payment verified. Admin has been notified for approval."}
 
 @app.put("/booking/{booking_id}/status")
-def update_booking_status_endpoint(booking_id: int, status: str):
+def update_booking_status_endpoint(booking_id: int, status: str, admin: dict = Depends(get_current_admin)):
     booking = get_booking_by_id(booking_id)
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")

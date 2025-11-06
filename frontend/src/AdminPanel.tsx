@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AdminLogin from './AdminLogin';
 import AdminSettings from './AdminSettings';
 import AdminManagement from './AdminManagement';
+import { authUtils } from './utils/auth';
 
 interface Booking {
   id: number;
@@ -31,19 +32,34 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
+  const [token, setToken] = useState<string | null>(authUtils.getToken());
   const [selectedProof, setSelectedProof] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'management' | 'settings'>('dashboard');
 
   useEffect(() => {
-    fetchBookings();
+    // Check authentication on component mount
+    if (!authUtils.isAuthenticated()) {
+      setToken(null);
+      return;
+    }
+    
+    // Verify token is still valid
+    authUtils.apiCall('/api/admin/me')
+      .then(response => {
+        if (response.ok) {
+          fetchBookings();
+        }
+      })
+      .catch(() => {
+        setToken(null);
+      });
   }, []);
 
   const fetchBookings = async () => {
     try {
       const [bookingsResponse, analyticsResponse] = await Promise.all([
-        fetch('/api/bookings'),
-        fetch('/api/analytics')
+        authUtils.apiCall('/api/bookings'),
+        authUtils.apiCall('/api/analytics')
       ]);
       
       const bookingsData = await bookingsResponse.json();
@@ -54,7 +70,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
         bookingsData.map(async (booking: any) => {
           if (booking.showtime_id) {
             try {
-              const showtimeResponse = await fetch(`/api/showtime/${booking.showtime_id}`);
+              const showtimeResponse = await authUtils.apiCall(`/api/showtime/${booking.showtime_id}`);
               const showtimeData = await showtimeResponse.json();
               return {
                 ...booking,
@@ -82,7 +98,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
 
   const updateBookingStatus = async (bookingId: number, status: string) => {
     try {
-      const response = await fetch(`/api/booking/${bookingId}/status?status=${status}`, {
+      const response = await authUtils.apiCall(`/api/booking/${bookingId}/status?status=${status}`, {
         method: 'PUT'
       });
       
@@ -116,14 +132,12 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('admin_token');
-    setToken(null);
+    authUtils.logout();
   };
 
-  // Skip login for now since backend doesn't require auth
-  // if (!token) {
-  //   return <AdminLogin onLogin={setToken} />;
-  // }
+  if (!token) {
+    return <AdminLogin onLogin={setToken} />;
+  }
 
   if (loading) return <div>Loading bookings...</div>;
 

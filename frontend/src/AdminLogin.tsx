@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { authUtils } from './utils/auth';
 
 interface Props {
   onLogin: (token: string) => void;
@@ -13,7 +14,7 @@ const AdminLogin: React.FC<Props> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/admin/login', {
+      const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials)
@@ -21,7 +22,7 @@ const AdminLogin: React.FC<Props> = ({ onLogin }) => {
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem('admin_token', data.access_token);
+        authUtils.setToken(data.access_token);
         onLogin(data.access_token);
       } else {
         alert('Invalid credentials');
@@ -117,7 +118,7 @@ const AdminLogin: React.FC<Props> = ({ onLogin }) => {
         }}>
           <strong>Demo Credentials:</strong><br />
           Username: admin<br />
-          Password: admin123
+          Password: BambooAdmin1989&*
         </div>
       </div>
     </div>
