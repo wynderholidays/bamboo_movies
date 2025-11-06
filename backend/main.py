@@ -611,10 +611,22 @@ def get_payment_proof(booking_id: int):
     
     file_url = booking["payment_proof"]
     
-    # If S3 URL, redirect to S3
-    if file_url.startswith("https://"):
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=file_url)
+    # If S3 URL, fetch and serve the content
+    if file_url.startswith("https://") and s3_client:
+        try:
+            # Extract S3 key from URL
+            s3_key = file_url.split(f"{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/")[1]
+            
+            # Get object from S3
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            content = response['Body'].read()
+            content_type = response.get('ContentType', 'image/jpeg')
+            
+            from fastapi.responses import Response
+            return Response(content=content, media_type=content_type)
+        except Exception as e:
+            logger.error(f"Error fetching S3 object: {e}")
+            raise HTTPException(status_code=404, detail="Payment proof not accessible")
     else:
         # Local file fallback
         from fastapi.responses import FileResponse
