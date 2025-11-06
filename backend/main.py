@@ -466,6 +466,17 @@ def verify_jwt_token(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Verify admin JWT token"""
+    try:
+        payload = verify_jwt_token(credentials.credentials)
+        if payload['username'] != ADMIN_USERNAME:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        return payload
+    except Exception as e:
+        logger.error(f"Authentication failed: {str(e)}")
+        raise HTTPException(status_code=401, detail="Authentication required")
+
 @app.post("/admin/login")
 def admin_login(credentials: AdminLogin):
     logger.info(f"Admin login attempt for username: {credentials.username}")
@@ -534,8 +545,6 @@ def get_payment_proof(booking_id: int):
         # Local file fallback
         from fastapi.responses import FileResponse
         return FileResponse(file_url)
-
-
 
 @app.post("/verify-payment-otp")
 def verify_payment_otp(request: OTPVerification):
