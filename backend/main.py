@@ -172,7 +172,7 @@ class OTPRequest(BaseModel):
     phone: str
 
 class OTPVerification(BaseModel):
-    phone: str
+    email: str
     otp: str
 
 class AdminLogin(BaseModel):
@@ -376,7 +376,7 @@ async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
         logger.info(f"Generated OTP for booking {booking_id}: {otp}")
         
         # Store OTP in database
-        store_otp(booking['customer_phone'], otp, booking_id, expires_at)
+        store_otp(booking['customer_email'], otp, booking_id, expires_at)
         logger.info(f"OTP stored for email: {booking['customer_email']}")
         
         # Get detailed booking information for email
@@ -468,7 +468,7 @@ def get_payment_proof(booking_id: int):
 
 @app.post("/verify-payment-otp")
 def verify_payment_otp(request: OTPVerification):
-    booking_id = verify_otp(request.phone, request.otp)
+    booking_id = verify_otp(request.email, request.otp)
     
     if not booking_id:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")

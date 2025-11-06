@@ -121,39 +121,39 @@ def get_booked_seats(showtime_id):
     return booked_seats
 
 # OTP operations
-def store_otp(phone, otp, booking_id, expires_at):
+def store_otp(email, otp, booking_id, expires_at):
     """Store OTP in database"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Delete existing OTP for this phone
-    cursor.execute("DELETE FROM otp_storage WHERE phone = %s", (phone,))
+    # Delete existing OTP for this email
+    cursor.execute("DELETE FROM otp_storage WHERE email = %s", (email,))
     
     # Insert new OTP
     cursor.execute("""
-        INSERT INTO otp_storage (phone, otp, booking_id, expires_at)
+        INSERT INTO otp_storage (email, otp, booking_id, expires_at)
         VALUES (%s, %s, %s, %s)
-    """, (phone, otp, booking_id, expires_at))
+    """, (email, otp, booking_id, expires_at))
     
     conn.commit()
     cursor.close()
     conn.close()
 
-def verify_otp(phone, otp):
+def verify_otp(email, otp):
     """Verify OTP and return booking_id if valid"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute("""
         SELECT booking_id FROM otp_storage 
-        WHERE phone = %s AND otp = %s AND expires_at > CURRENT_TIMESTAMP
-    """, (phone, otp))
+        WHERE email = %s AND otp = %s AND expires_at > CURRENT_TIMESTAMP
+    """, (email, otp))
     
     result = cursor.fetchone()
     
     if result:
         # Delete used OTP
-        cursor.execute("DELETE FROM otp_storage WHERE phone = %s", (phone,))
+        cursor.execute("DELETE FROM otp_storage WHERE email = %s", (email,))
         conn.commit()
         booking_id = result['booking_id']
     else:
