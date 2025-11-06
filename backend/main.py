@@ -172,7 +172,8 @@ class OTPRequest(BaseModel):
     phone: str
 
 class OTPVerification(BaseModel):
-    email: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     otp: str
 
 class AdminLogin(BaseModel):
@@ -468,8 +469,27 @@ def get_payment_proof(booking_id: int):
 
 @app.post("/verify-payment-otp")
 def verify_payment_otp(request: OTPVerification):
-    logger.info(f"OTP verification request - Email: {request.email}, OTP: {request.otp}")
-    booking_id = verify_otp(request.email, request.otp)
+    logger.info(f"OTP verification request - Email: {request.email}, Phone: {request.phone}, OTP: {request.otp}")
+    
+    # Handle both email and phone for backward compatibility
+    if request.email:
+        email = request.email
+    elif request.phone:
+        # Look up email by phone
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT customer_email FROM bookings WHERE customer_phone = %s ORDER BY created_at DESC LIMIT 1", (request.phone,))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not result:
+            raise HTTPException(status_code=400, detail="No booking found for this phone number")
+        email = result['customer_email']
+    else:
+        raise HTTPException(status_code=400, detail="Either email or phone is required")
+    
+    booking_id = verify_otp(email, request.otp)
     
     if not booking_id:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
