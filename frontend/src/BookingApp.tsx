@@ -251,7 +251,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
       const response = await fetch('/api/verify-payment-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: customerInfo.email, otp: paymentOtp })
+        body: JSON.stringify({ email: customerInfo.email, otp: paymentOtp })
       });
       
       if (response.ok) {
