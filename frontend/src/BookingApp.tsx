@@ -242,7 +242,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Upload failed: ' + error.message);
+      alert('Upload failed: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
