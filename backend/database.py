@@ -105,12 +105,19 @@ def get_booked_seats(showtime_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Clean up expired pending_payment bookings (older than 5 minutes)
+    cursor.execute("""
+        UPDATE bookings SET status = 'expired' 
+        WHERE status = 'pending_payment' AND created_at < NOW() - INTERVAL '5 minutes'
+    """)
+    
     cursor.execute("""
         SELECT seats FROM bookings 
         WHERE showtime_id = %s AND status IN ('pending_payment', 'pending_verification', 'pending_approval', 'approved', 'confirmed')
     """, (showtime_id,))
     
     results = cursor.fetchall()
+    conn.commit()
     cursor.close()
     conn.close()
     

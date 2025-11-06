@@ -56,8 +56,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
       fetchTheaterInfo();
     }
     
-    // Restore booking data from sessionStorage if on payment page
-    if (currentRoute.includes('/payment')) {
+    // Restore booking data from sessionStorage if on payment or success page
+    if (currentRoute.includes('/payment') || currentRoute.includes('/success')) {
       const storedBooking = sessionStorage.getItem('bookingResponse');
       const storedCustomer = sessionStorage.getItem('customerInfo');
       
@@ -156,6 +156,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         // Store booking and customer data in sessionStorage for persistence
         sessionStorage.setItem('bookingResponse', JSON.stringify(data));
         sessionStorage.setItem('customerInfo', JSON.stringify(customerInfo));
+        sessionStorage.setItem('selectedShowtimeId', selectedShowtimeId.toString());
+        sessionStorage.setItem('selectedSeats', JSON.stringify(selectedSeats));
         console.log('Stored booking and customer data in sessionStorage');
         
         // Try navigate first
@@ -522,7 +524,13 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         <div className="success-section">
           <h2>🎬 Booking Submitted!</h2>
           <div style={{ background: '#e3f2fd', padding: '20px', borderRadius: '10px', margin: '20px 0' }}>
+            <h3>📋 Booking Summary</h3>
             <p><strong>Booking ID:</strong> {bookingResponse?.booking_id}</p>
+            <p><strong>Movie:</strong> {theaterInfo?.movie}</p>
+            <p><strong>Theater:</strong> {theaterInfo?.theater}</p>
+            <p><strong>Date:</strong> {theaterInfo?.show_date ? new Date(theaterInfo.show_date).toLocaleDateString() : 'N/A'}</p>
+            <p><strong>Time:</strong> {theaterInfo?.showtime}</p>
+            <p><strong>Seats:</strong> {JSON.parse(sessionStorage.getItem('selectedSeats') || '[]').join(', ')}</p>
             <p><strong>Total Amount:</strong> Rp {bookingResponse?.total_amount?.toLocaleString()}</p>
             <p><strong>Status:</strong> Pending Admin Approval</p>
           </div>
@@ -549,6 +557,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
               setPaymentFile(null);
               sessionStorage.removeItem('bookingResponse');
               sessionStorage.removeItem('customerInfo');
+              sessionStorage.removeItem('selectedShowtimeId');
+              sessionStorage.removeItem('selectedSeats');
             }}
             style={{
               marginTop: '20px',
