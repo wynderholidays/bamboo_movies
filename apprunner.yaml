@@ -1,0 +1,15 @@
+version: 1.0
+runtime: docker
+build:
+  commands:
+    build:
+      - echo "Using Dockerfile for build"
+run:
+  runtime-version: latest
+  command: python main.py
+  network:
+    port: 8000
+    env: PORT
+  env:
+    - name: PORT
+      value: "8000"
