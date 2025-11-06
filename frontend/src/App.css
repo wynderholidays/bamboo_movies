@@ -56,9 +56,9 @@ header {
 }
 
 .theater-layout {
-  max-width: 700px;
+  max-width: 100%;
   margin: 20px auto;
-  padding: 20px;
+  padding: 15px;
   background: #f5f5f5;
   border-radius: 10px;
   overflow-x: auto;
@@ -66,79 +66,101 @@ header {
 
 @media (max-width: 768px) {
   .theater-layout {
-    padding: 10px;
-    margin: 10px auto;
-    max-width: 100%;
+    padding: 8px;
+    margin: 10px 5px;
+    border-radius: 8px;
   }
 }
 
 .theater-row {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   justify-content: center;
-  min-width: 400px;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
   .theater-row {
-    margin-bottom: 6px;
-    min-width: 350px;
+    margin-bottom: 4px;
+    transform: scale(0.85);
+    transform-origin: center;
   }
 }
 
 .row-label {
-  width: 30px;
+  width: 25px;
   font-weight: bold;
-  font-size: 16px;
-  margin-right: 10px;
+  font-size: 14px;
+  margin-right: 8px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
   .row-label {
-    width: 25px;
-    font-size: 14px;
-    margin-right: 8px;
+    width: 20px;
+    font-size: 12px;
+    margin-right: 6px;
   }
 }
 
 .left-section, .right-section {
   display: flex;
-  gap: 4px;
+  gap: 3px;
 }
 
 @media (max-width: 768px) {
   .left-section, .right-section {
-    gap: 3px;
+    gap: 2px;
   }
 }
 
 .aisle {
-  width: 30px;
-  margin: 0 8px;
+  width: 20px;
+  margin: 0 6px;
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
   .aisle {
-    width: 20px;
-    margin: 0 5px;
+    width: 15px;
+    margin: 0 4px;
   }
 }
 
 .seat {
-  width: 35px;
-  height: 35px;
-  border: 2px solid #ddd;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
   background: #fff;
   transition: all 0.2s;
   flex-shrink: 0;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .seat {
+    width: 26px;
+    height: 26px;
+    font-size: 8px;
+    border-radius: 3px;
+  }
+}
+
+@media (max-width: 480px) {
+  .seat {
+    width: 24px;
+    height: 24px;
+    font-size: 7px;
+  }
 }
 
 .seat:not(.pending-approval):not(.approved):not(.confirmed):not(.reserved):not(.non-selectable) {
@@ -149,17 +171,15 @@ header {
   cursor: pointer;
 }
 
-@media (max-width: 768px) {
-  .seat {
-    width: 28px;
-    height: 28px;
-    font-size: 9px;
-    border-width: 1px;
-  }
+.seat:hover:not(.pending-approval):not(.approved):not(.confirmed):not(.reserved):not(.non-selectable) {
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-.seat:hover {
-  transform: scale(1.1);
+@media (max-width: 768px) {
+  .seat:hover:not(.pending-approval):not(.approved):not(.confirmed):not(.reserved):not(.non-selectable) {
+    transform: scale(1.02);
+  }
 }
 
 .seat.selected {

@@ -526,7 +526,23 @@ def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(securi
         raise HTTPException(status_code=401, detail="Authentication required")
 
 @app.get("/bookings")
-def get_all_bookings_endpoint(admin: dict = Depends(get_current_admin)):
+def get_all_bookings_endpoint(status: str = None, admin: dict = Depends(get_current_admin)):
+    if status:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT b.*, s.show_date, s.show_time, m.title as movie_title, t.name as theater_name
+            FROM bookings b
+            LEFT JOIN showtimes s ON b.showtime_id = s.id
+            LEFT JOIN movies m ON s.movie_id = m.id
+            LEFT JOIN theaters t ON s.theater_id = t.id
+            WHERE b.status = %s
+            ORDER BY b.created_at DESC
+        """, (status,))
+        bookings = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return bookings
     return get_all_bookings()
 
 @app.get("/payment-proof/{booking_id}")
@@ -685,6 +701,21 @@ def update_booking_status_endpoint(booking_id: int, status: str, admin: dict = D
         send_email(booking['customer_email'], subject, body)
     
     return {"message": f"Booking status updated from {old_status} to {status}"}
+
+@app.get("/bookings/stats")
+def get_booking_stats(admin: dict = Depends(get_current_admin)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT status, COUNT(*) as count
+        FROM bookings
+        GROUP BY status
+    """)
+    stats = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    return {stat['status']: stat['count'] for stat in stats}
 
 @app.get("/analytics")
 def get_analytics_endpoint():

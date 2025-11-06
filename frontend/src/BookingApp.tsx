@@ -366,16 +366,11 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
           </div>
           
           <div className="payment-methods">
-            <div className="upi-payment">
-              <h3>UPI Payment</h3>
-              <p>UPI ID: moviebooking@paytm</p>
-            </div>
-            
             <div className="bank-transfer">
               <h3>Bank Transfer</h3>
-              <p>Account: 1234567890</p>
-              <p>IFSC: HDFC0001234</p>
-              <p>Name: Movie Booking System</p>
+              <p>Name: Harikumar Maruthur</p>
+              <p>Bank: BCA</p>
+              <p>Account Number: 3350229476</p>
             </div>
           </div>
 

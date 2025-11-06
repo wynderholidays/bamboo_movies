@@ -35,35 +35,45 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
   const [token, setToken] = useState<string | null>(authUtils.getToken());
   const [selectedProof, setSelectedProof] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'management' | 'settings'>('dashboard');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [bookingStats, setBookingStats] = useState<Record<string, number>>({});
 
   useEffect(() => {
     // Check authentication on component mount
     if (!authUtils.isAuthenticated()) {
       setToken(null);
+      setLoading(false);
       return;
     }
     
-    // Verify token is still valid
+    // Verify token is still valid and fetch data
     authUtils.apiCall('/api/admin/me')
       .then(response => {
         if (response.ok) {
-          fetchBookings();
+          fetchBookings('all');
+        } else {
+          setToken(null);
+          setLoading(false);
         }
       })
       .catch(() => {
         setToken(null);
+        setLoading(false);
       });
-  }, []);
+  }, [token]);
 
-  const fetchBookings = async () => {
+  const fetchBookings = async (status?: string) => {
     try {
-      const [bookingsResponse, analyticsResponse] = await Promise.all([
-        authUtils.apiCall('/api/bookings'),
-        authUtils.apiCall('/api/analytics')
+      const bookingsUrl = status && status !== 'all' ? `/api/bookings?status=${status}` : '/api/bookings';
+      const [bookingsResponse, analyticsResponse, statsResponse] = await Promise.all([
+        authUtils.apiCall(bookingsUrl),
+        authUtils.apiCall('/api/analytics'),
+        authUtils.apiCall('/api/bookings/stats')
       ]);
       
       const bookingsData = await bookingsResponse.json();
       const analyticsData = await analyticsResponse.json();
+      const statsData = await statsResponse.json();
       
       // Add showtime info to bookings
       const bookingsWithShowtime = await Promise.all(
@@ -89,6 +99,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
       
       setBookings(bookingsWithShowtime);
       setAnalytics(analyticsData);
+      setBookingStats(statsData);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -133,10 +144,15 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
 
   const logout = () => {
     authUtils.logout();
+    setToken(null);
+    navigate('/admin');
   };
 
   if (!token) {
-    return <AdminLogin onLogin={setToken} />;
+    return <AdminLogin onLogin={(newToken) => {
+      setToken(newToken);
+      setLoading(true);
+    }} />;
   }
 
   if (loading) return <div>Loading bookings...</div>;
@@ -210,7 +226,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
           </div>
           <div style={{ background: '#e8f5e8', padding: '20px', borderRadius: '10px', textAlign: 'center' }}>
             <h3 style={{ margin: '0 0 10px 0', color: '#2e7d32' }}>Total Revenue</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>₹{analytics.total_revenue}</p>
+            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Rp {analytics.total_revenue.toLocaleString()}</p>
           </div>
           <div style={{ background: '#fff3e0', padding: '20px', borderRadius: '10px', textAlign: 'center' }}>
             <h3 style={{ margin: '0 0 10px 0', color: '#f57c00' }}>Confirmed</h3>
@@ -227,11 +243,29 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
         </div>
       )}
       
-      <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px' }}>
-        <button onClick={fetchBookings} style={{ padding: '10px 20px' }}>
+      <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+        <button onClick={() => fetchBookings(statusFilter)} style={{ padding: '10px 20px' }}>
           Refresh Data
         </button>
-        <span style={{ fontSize: '16px', fontWeight: 'bold' }}>All Bookings ({bookings.length})</span>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '16px', fontWeight: 'bold' }}>Filter by Status:</span>
+          <select 
+            value={statusFilter} 
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              fetchBookings(e.target.value);
+            }}
+            style={{ padding: '8px 12px', borderRadius: '5px', border: '1px solid #ddd' }}
+          >
+            <option value="all">All Bookings ({Object.values(bookingStats).reduce((a, b) => a + b, 0)})</option>
+            {Object.entries(bookingStats).map(([status, count]) => (
+              <option key={status} value={status}>
+                {status.replace('_', ' ').toUpperCase()} ({count})
+              </option>
+            ))}
+          </select>
+        </div>
+        <span style={{ fontSize: '14px', color: '#666' }}>Showing {bookings.length} bookings</span>
       </div>
 
       <div style={{ overflowX: 'auto' }}>
@@ -267,7 +301,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
                   <div>{booking.customer_phone}</div>
                 </td>
                 <td style={{ padding: '12px', border: '1px solid #ddd' }}>{booking.seats.join(', ')}</td>
-                <td style={{ padding: '12px', border: '1px solid #ddd' }}>₹{booking.total_amount}</td>
+                <td style={{ padding: '12px', border: '1px solid #ddd' }}>Rp {booking.total_amount.toLocaleString()}</td>
                 <td style={{ padding: '12px', border: '1px solid #ddd' }}>
                   <span style={{
                     padding: '4px 8px',
@@ -316,20 +350,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
                     </div>
                   )}
                   {booking.status === 'approved' && (
-                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                      <button 
-                        onClick={() => updateBookingStatus(booking.id, 'confirmed')}
-                        style={{ padding: '4px 8px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '3px', fontSize: '12px' }}
-                      >
-                        🎫 Confirm
-                      </button>
-                      <button 
-                        onClick={() => updateBookingStatus(booking.id, 'cancelled')}
-                        style={{ padding: '4px 8px', background: '#f44336', color: 'white', border: 'none', borderRadius: '3px', fontSize: '12px' }}
-                      >
-                        ✗ Cancel
-                      </button>
-                    </div>
+                    <span style={{ color: '#4CAF50', fontWeight: 'bold', fontSize: '12px' }}>✓ Approved</span>
                   )}
                   {booking.status === 'pending_payment' && (
                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
