@@ -13,9 +13,11 @@ from dotenv import load_dotenv
 import boto3
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
+from logger_config import logger
 
 # Load environment variables from .env file
 load_dotenv()
+logger.info("Starting Movie Booking API...")
 
 
 app = FastAPI()
@@ -70,15 +72,16 @@ try:
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
     )
-    print(f"AWS services initialized with region: {AWS_REGION}")
+    logger.info(f"AWS services initialized with region: {AWS_REGION}")
 except Exception as e:
     ses_client = None
     s3_client = None
-    print(f"AWS not configured: {e}")
+    logger.warning(f"AWS not configured: {e}")
 
 def send_email(to_email, subject, body):
+    logger.info(f"Attempting to send email to: {to_email}")
     if not ses_client:
-        print(f"Demo mode - Email would be sent to {to_email}")
+        logger.warning(f"Demo mode - Email would be sent to {to_email}")
         return False
     
     try:
@@ -90,15 +93,15 @@ def send_email(to_email, subject, body):
                 'Body': {'Html': {'Data': body, 'Charset': 'UTF-8'}}
             }
         )
-        print(f"Email sent successfully to {to_email}. MessageId: {response['MessageId']}")
+        logger.info(f"Email sent successfully to {to_email}. MessageId: {response['MessageId']}")
         return True
     except ClientError as e:
         error_code = e.response['Error']['Code']
         error_message = e.response['Error']['Message']
-        print(f"SES send error: {error_message}")
+        logger.error(f"SES send error: {error_message}")
         return False
     except Exception as e:
-        print(f"Email send error: {e}")
+        logger.error(f"Email send error: {e}")
         return False
 
 # Admin credentials
@@ -212,9 +215,9 @@ def get_showtime_info(showtime_id: int):
     approved_seats = []
     confirmed_seats = []
     
-    print(f"DEBUG: Showtime {showtime_id} bookings:")
+    logger.info(f"Showtime {showtime_id} bookings found: {len(results)}")
     for result in results:
-        print(f"  Seats: {result['seats']}, Status: {result['status']}")
+        logger.debug(f"  Seats: {result['seats']}, Status: {result['status']}")
         if result['status'] == 'pending_approval':
             pending_approval_seats.extend(result['seats'])
         elif result['status'] == 'approved':
@@ -222,7 +225,7 @@ def get_showtime_info(showtime_id: int):
         elif result['status'] == 'confirmed':
             confirmed_seats.extend(result['seats'])
     
-    print(f"DEBUG: Confirmed seats: {confirmed_seats}")
+    logger.info(f"Confirmed seats for showtime {showtime_id}: {confirmed_seats}")
     reserved_seat_ids = get_reserved_seats(showtime_id)
     
     return {
@@ -256,6 +259,7 @@ def reserve_seats_endpoint(reservation: SeatReservation):
 
 @app.post("/book")
 def create_booking_endpoint(booking: BookingRequest):
+    logger.info(f"Creating booking for showtime {booking.showtime_id}, customer: {booking.customer_name}, seats: {booking.selected_seats}")
     # Check if seats are still available
     booked_seats = get_booked_seats(booking.showtime_id)
     
@@ -279,6 +283,8 @@ def create_booking_endpoint(booking: BookingRequest):
         total_amount
     )
     
+    logger.info(f"Booking created successfully: ID {booking_id}, Amount: Rp {total_amount:,}")
+    
     return {
         "booking_id": booking_id,
         "total_amount": total_amount,
@@ -288,6 +294,99 @@ def create_booking_endpoint(booking: BookingRequest):
 
 @app.post("/upload-payment/{booking_id}")
 async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
+    logger.info(f"Upload payment proof request for booking {booking_id}, file: {file.filename}")
+    
+    try:
+        booking = get_booking_by_id(booking_id)
+        if not booking:
+            logger.error(f"Booking {booking_id} not found")
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        logger.info(f"Processing file upload for booking {booking_id}")
+        
+        # Upload to S3
+        try:
+            file_key = f"payment-proofs/{booking_id}_{file.filename}"
+            content = await file.read()
+            logger.info(f"File read successfully, size: {len(content)} bytes")
+            
+            if s3_client:
+                logger.info(f"Uploading to S3 bucket: {S3_BUCKET}, key: {file_key}")
+                s3_client.put_object(
+                    Bucket=S3_BUCKET,
+                    Key=file_key,
+                    Body=content,
+                    ContentType=file.content_type or 'image/jpeg'
+                )
+                file_url = f"https://{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{file_key}"
+                logger.info(f"File uploaded to S3 successfully: {file_url}")
+            else:
+                # Fallback to local storage for development
+                logger.warning("S3 client not available, using local storage")
+                os.makedirs("uploads", exist_ok=True)
+                file_url = f"uploads/{booking_id}_{file.filename}"
+                with open(file_url, "wb") as buffer:
+                    buffer.write(content)
+                logger.info(f"File saved locally: {file_url}")
+        except Exception as upload_error:
+            logger.error(f"File upload failed: {str(upload_error)}")
+            raise HTTPException(status_code=500, detail=f"File upload failed: {str(upload_error)}")
+        
+        # Update booking with payment proof
+        logger.info(f"Updating booking {booking_id} with payment proof: {file_url}")
+        update_booking_payment_proof(booking_id, file_url)
+        
+        # Generate OTP for email verification
+        otp = str(random.randint(100000, 999999))
+        expires_at = datetime.now() + timedelta(minutes=5)
+        logger.info(f"Generated OTP for booking {booking_id}: {otp}")
+        
+        # Store OTP in database
+        store_otp(booking['customer_email'], otp, booking_id, expires_at)
+        logger.info(f"OTP stored for email: {booking['customer_email']}")
+        
+        # Get detailed booking information for email
+        showtime_layout = get_showtime_layout(booking['showtime_id'])
+        
+        # Send OTP email with detailed booking information
+        subject = f"Payment Verification - Booking #{booking_id}"
+        body = f"""
+        <h2>🎬 Payment Verification Required</h2>
+        <p>Dear {booking['customer_name']},</p>
+        <p>Your payment proof has been uploaded successfully for the following booking:</p>
+        
+        <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3>📋 Booking Details:</h3>
+            <p><strong>Booking ID:</strong> #{booking_id}</p>
+            <p><strong>Movie:</strong> {showtime_layout['movie'] if showtime_layout else 'N/A'}</p>
+            <p><strong>Theater:</strong> {showtime_layout['theater'] if showtime_layout else 'N/A'}</p>
+            <p><strong>Address:</strong> {showtime_layout.get('address', 'N/A') if showtime_layout else 'N/A'}</p>
+            <p><strong>Show Date:</strong> {showtime_layout['show_date'] if showtime_layout else 'N/A'}</p>
+            <p><strong>Show Time:</strong> {showtime_layout['showtime'] if showtime_layout else 'N/A'}</p>
+            <p><strong>Selected Seats:</strong> {', '.join(booking['seats'])}</p>
+            <p><strong>Total Amount:</strong> Rp {booking['total_amount']:,}</p>
+        </div>
+        
+        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>🔐 Verification OTP:</strong> <span style="font-size: 24px; font-weight: bold; color: #007bff;">{otp}</span></p>
+            <p><em>This OTP is valid for 5 minutes only.</em></p>
+        </div>
+        
+        <p>Please enter this OTP to verify your payment and proceed with booking confirmation.</p>
+        """
+        
+        if send_email(booking['customer_email'], subject, body):
+            logger.info(f"OTP email sent successfully to {booking['customer_email']}")
+            return {"message": "Payment uploaded. Check email for verification OTP.", "requires_otp": True}
+        else:
+            logger.warning(f"Email sending failed, returning OTP in response")
+            return {"message": f"Payment uploaded. OTP: {otp} (Demo mode)", "requires_otp": True}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in upload_payment_proof: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")ef upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
     booking = get_booking_by_id(booking_id)
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
