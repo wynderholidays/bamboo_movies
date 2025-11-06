@@ -11,6 +11,7 @@ interface TheaterInfo {
   show_date?: string;
   showtime: string;
   price: number;
+  pending_payment_seats: string[];
   pending_approval_seats: string[];
   approved_seats: string[];
   confirmed_seats: string[];
@@ -76,7 +77,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     console.log(`Toggling seat ${seatId}`);
     
     // Check if seat is unavailable
-    const isUnavailable = theaterInfo?.pending_approval_seats?.includes(seatId) ||
+    const isUnavailable = theaterInfo?.pending_payment_seats?.includes(seatId) ||
+                         theaterInfo?.pending_approval_seats?.includes(seatId) ||
                          theaterInfo?.approved_seats?.includes(seatId) ||
                          theaterInfo?.confirmed_seats?.includes(seatId) ||
                          theaterInfo?.non_selectable?.includes(seatId);
@@ -132,7 +134,10 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         console.log('Booking successful:', data);
         setBookingResponse(data);
         console.log('Navigating to payment page...');
+        console.log('Current route before navigation:', currentRoute);
+        console.log('Target route:', `/payment/${selectedShowtimeId}`);
         navigate(`/payment/${selectedShowtimeId}`);
+        console.log('Navigation called, checking if route changed...');
       } else {
         const error = await response.json();
         console.error('Booking failed:', error);
@@ -290,13 +295,14 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                     const seatId = generateSeatId(row, col + 1);
                     const isSelected = selectedSeats.includes(seatId);
                     const isNonSelectable = theaterInfo.non_selectable?.includes(seatId);
+                    const isPendingPayment = theaterInfo.pending_payment_seats?.includes(seatId);
                     const isPendingApproval = theaterInfo.pending_approval_seats?.includes(seatId);
                     const isApproved = theaterInfo.approved_seats?.includes(seatId);
                     const isConfirmed = theaterInfo.confirmed_seats?.includes(seatId);
                     
                     let seatClass = '';
                     if (isNonSelectable) seatClass = 'non-selectable';
-                    else if (isPendingApproval) seatClass = 'pending-approval';
+                    else if (isPendingPayment || isPendingApproval) seatClass = 'pending-approval';
                     else if (isApproved || isConfirmed) seatClass = 'confirmed';
                     else if (isSelected) seatClass = 'selected';
                     
@@ -317,13 +323,14 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                     const seatId = generateSeatId(row, col + theaterInfo.left_cols + 1);
                     const isSelected = selectedSeats.includes(seatId);
                     const isNonSelectable = theaterInfo.non_selectable?.includes(seatId);
+                    const isPendingPayment = theaterInfo.pending_payment_seats?.includes(seatId);
                     const isPendingApproval = theaterInfo.pending_approval_seats?.includes(seatId);
                     const isApproved = theaterInfo.approved_seats?.includes(seatId);
                     const isConfirmed = theaterInfo.confirmed_seats?.includes(seatId);
                     
                     let seatClass = '';
                     if (isNonSelectable) seatClass = 'non-selectable';
-                    else if (isPendingApproval) seatClass = 'pending-approval';
+                    else if (isPendingPayment || isPendingApproval) seatClass = 'pending-approval';
                     else if (isApproved || isConfirmed) seatClass = 'confirmed';
                     else if (isSelected) seatClass = 'selected';
                     

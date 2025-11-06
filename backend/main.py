@@ -261,13 +261,14 @@ def get_showtime_info(showtime_id: int):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT seats, status FROM bookings 
-        WHERE showtime_id = %s AND status IN ('pending_approval', 'approved', 'confirmed')
+        WHERE showtime_id = %s AND status IN ('pending_payment', 'pending_approval', 'approved', 'confirmed')
     """, (showtime_id,))
     
     results = cursor.fetchall()
     cursor.close()
     conn.close()
     
+    pending_payment_seats = []
     pending_approval_seats = []
     approved_seats = []
     confirmed_seats = []
@@ -275,7 +276,9 @@ def get_showtime_info(showtime_id: int):
     logger.info(f"Showtime {showtime_id} bookings found: {len(results)}")
     for result in results:
         logger.debug(f"  Seats: {result['seats']}, Status: {result['status']}")
-        if result['status'] == 'pending_approval':
+        if result['status'] == 'pending_payment':
+            pending_payment_seats.extend(result['seats'])
+        elif result['status'] == 'pending_approval':
             pending_approval_seats.extend(result['seats'])
         elif result['status'] == 'approved':
             approved_seats.extend(result['seats'])
@@ -287,6 +290,7 @@ def get_showtime_info(showtime_id: int):
     
     return {
         **showtime_layout,
+        "pending_payment_seats": pending_payment_seats,
         "pending_approval_seats": pending_approval_seats,
         "approved_seats": approved_seats, 
         "confirmed_seats": confirmed_seats,
