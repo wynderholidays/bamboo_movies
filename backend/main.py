@@ -468,6 +468,7 @@ def get_payment_proof(booking_id: int):
 
 @app.post("/verify-payment-otp")
 def verify_payment_otp(request: OTPVerification):
+    logger.info(f"OTP verification request - Email: {request.email}, OTP: {request.otp}")
     booking_id = verify_otp(request.email, request.otp)
     
     if not booking_id:
