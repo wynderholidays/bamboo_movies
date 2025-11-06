@@ -123,11 +123,19 @@ def get_booked_seats(showtime_id):
 # OTP operations
 def store_otp(email, otp, booking_id, expires_at):
     """Store OTP in database"""
+    import logging
+    logger = logging.getLogger('movies-api')
+    
+    logger.info(f"=== STORING OTP ===")
+    logger.info(f"Email: '{email}', OTP: '{otp}', Booking ID: {booking_id}, Expires: {expires_at}")
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
     # Delete existing OTP for this email
     cursor.execute("DELETE FROM otp_storage WHERE email = %s", (email,))
+    deleted_count = cursor.rowcount
+    logger.info(f"Deleted {deleted_count} existing OTP records for email: '{email}'")
     
     # Insert new OTP
     cursor.execute("""
@@ -136,32 +144,76 @@ def store_otp(email, otp, booking_id, expires_at):
     """, (email, otp, booking_id, expires_at))
     
     conn.commit()
+    logger.info(f"✓ OTP stored successfully for email: '{email}'")
+    
+    # Verify it was stored
+    cursor.execute("SELECT * FROM otp_storage WHERE email = %s", (email,))
+    stored_otp = cursor.fetchone()
+    if stored_otp:
+        logger.info(f"✓ Verification: OTP found in database - email='{stored_otp['email']}', otp='{stored_otp['otp']}', booking_id={stored_otp['booking_id']}")
+    else:
+        logger.error(f"✗ Verification failed: OTP not found in database after insert")
+    
     cursor.close()
     conn.close()
+    logger.info(f"=== OTP STORAGE COMPLETE ===")
 
 def verify_otp(email, otp):
     """Verify OTP and return booking_id if valid"""
+    import logging
+    logger = logging.getLogger('movies-api')
+    
+    logger.info(f"=== OTP DATABASE VERIFICATION ===")
+    logger.info(f"Searching for email: '{email}' with OTP: '{otp}'")
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # First, let's see what OTPs exist for this email
+    cursor.execute("SELECT * FROM otp_storage WHERE email = %s", (email,))
+    all_otps = cursor.fetchall()
+    logger.info(f"Found {len(all_otps)} OTP records for email '{email}'")
+    
+    for i, otp_record in enumerate(all_otps):
+        logger.info(f"OTP {i+1}: email='{otp_record['email']}', otp='{otp_record['otp']}', booking_id={otp_record['booking_id']}, expires_at={otp_record['expires_at']}")
+        logger.info(f"OTP {i+1}: Current time vs expires_at = {datetime.now()} vs {otp_record['expires_at']}")
+        logger.info(f"OTP {i+1}: Is expired? {otp_record['expires_at'] <= datetime.now()}")
+    
+    # Now try the actual verification
     cursor.execute("""
-        SELECT booking_id FROM otp_storage 
+        SELECT booking_id, expires_at FROM otp_storage 
         WHERE email = %s AND otp = %s AND expires_at > CURRENT_TIMESTAMP
     """, (email, otp))
     
     result = cursor.fetchone()
+    logger.info(f"OTP verification query result: {result}")
     
     if result:
+        logger.info(f"✓ OTP verification successful! Booking ID: {result['booking_id']}")
         # Delete used OTP
         cursor.execute("DELETE FROM otp_storage WHERE email = %s", (email,))
         conn.commit()
         booking_id = result['booking_id']
+        logger.info(f"✓ Deleted used OTP for email: '{email}'")
     else:
+        logger.error(f"✗ OTP verification failed for email: '{email}' with OTP: '{otp}'")
+        # Let's also check if there's an OTP with wrong code or expired
+        cursor.execute("SELECT * FROM otp_storage WHERE email = %s", (email,))
+        existing_otps = cursor.fetchall()
+        if existing_otps:
+            for existing in existing_otps:
+                if existing['otp'] != otp:
+                    logger.error(f"✗ Wrong OTP code. Expected: '{existing['otp']}', Got: '{otp}'")
+                if existing['expires_at'] <= datetime.now():
+                    logger.error(f"✗ OTP expired. Expires at: {existing['expires_at']}, Current: {datetime.now()}")
+        else:
+            logger.error(f"✗ No OTP found for email: '{email}'")
         booking_id = None
     
     cursor.close()
     conn.close()
     
+    logger.info(f"=== OTP VERIFICATION END - Result: {booking_id} ===")
     return booking_id
 
 # Seat reservation operations

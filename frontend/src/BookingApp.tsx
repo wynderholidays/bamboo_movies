@@ -57,11 +57,18 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     }
     
     // Restore booking data from sessionStorage if on payment page
-    if (currentRoute.includes('/payment') && !bookingResponse) {
+    if (currentRoute.includes('/payment')) {
       const storedBooking = sessionStorage.getItem('bookingResponse');
-      if (storedBooking) {
+      const storedCustomer = sessionStorage.getItem('customerInfo');
+      
+      if (storedBooking && !bookingResponse) {
         console.log('Restoring booking data from sessionStorage');
         setBookingResponse(JSON.parse(storedBooking));
+      }
+      
+      if (storedCustomer && (!customerInfo.email || !customerInfo.name)) {
+        console.log('Restoring customer data from sessionStorage');
+        setCustomerInfo(JSON.parse(storedCustomer));
       }
     }
   }, [selectedShowtimeId, currentRoute]);
@@ -146,9 +153,10 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         console.log('Current route before navigation:', currentRoute);
         console.log('Target route:', `/payment/${selectedShowtimeId}`);
         
-        // Store booking data in sessionStorage for persistence
+        // Store booking and customer data in sessionStorage for persistence
         sessionStorage.setItem('bookingResponse', JSON.stringify(data));
-        console.log('Stored booking data in sessionStorage');
+        sessionStorage.setItem('customerInfo', JSON.stringify(customerInfo));
+        console.log('Stored booking and customer data in sessionStorage');
         
         // Try navigate first
         navigate(`/payment/${selectedShowtimeId}`);
@@ -436,7 +444,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                   cursor: isBooking ? 'not-allowed' : 'pointer'
                 }}
               >
-                {isBooking ? 'Processing...' : 'Confirm Booking'}
+                {isBooking ? 'Processing...' : 'Confirm Booking J'}
               </button>
             </div>
           )}
@@ -539,6 +547,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
               setCustomerInfo({ name: '', email: '', phone: '' });
               setBookingResponse(null);
               setPaymentFile(null);
+              sessionStorage.removeItem('bookingResponse');
+              sessionStorage.removeItem('customerInfo');
             }}
             style={{
               marginTop: '20px',

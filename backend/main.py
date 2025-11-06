@@ -361,6 +361,13 @@ def create_booking_endpoint(booking: BookingRequest):
         logger.info(f"Calculated total amount: {total_amount} for {len(booking.selected_seats)} seats at {showtime_layout['price']} each")
         
         # Create booking in database
+        logger.info(f"=== CREATING BOOKING ===")
+        logger.info(f"Customer name: '{booking.customer_name}'")
+        logger.info(f"Customer email: '{booking.customer_email}'")
+        logger.info(f"Customer phone: '{booking.customer_phone}'")
+        logger.info(f"Selected seats: {booking.selected_seats}")
+        logger.info(f"Total amount: {total_amount}")
+        
         booking_id = create_booking(
             booking.showtime_id,
             booking.customer_name,
@@ -370,7 +377,8 @@ def create_booking_endpoint(booking: BookingRequest):
             total_amount
         )
         
-        logger.info(f"Booking created successfully: ID {booking_id}, Amount: Rp {total_amount:,}")
+        logger.info(f"✓ Booking created successfully: ID {booking_id}, Amount: Rp {total_amount:,}")
+        logger.info(f"=== BOOKING CREATION COMPLETE ===")
         
         return {
             "booking_id": booking_id,
@@ -432,11 +440,16 @@ async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
         # Generate OTP for email verification
         otp = str(random.randint(100000, 999999))
         expires_at = datetime.now() + timedelta(minutes=5)
-        logger.info(f"Generated OTP for booking {booking_id}: {otp}")
+        logger.info(f"=== GENERATING OTP FOR BOOKING {booking_id} ===")
+        logger.info(f"Customer email from booking: '{booking['customer_email']}'")
+        logger.info(f"Generated OTP: '{otp}'")
+        logger.info(f"OTP expires at: {expires_at}")
         
         # Store OTP in database
+        logger.info(f"Storing OTP for email: '{booking['customer_email']}'")
         store_otp(booking['customer_email'], otp, booking_id, expires_at)
-        logger.info(f"OTP stored for email: {booking['customer_email']}")
+        logger.info(f"✓ OTP storage completed for email: '{booking['customer_email']}'")
+        logger.info(f"=== OTP GENERATION COMPLETE ===")
         
         # Get detailed booking information for email
         showtime_layout = get_showtime_layout(booking['showtime_id'])
@@ -609,39 +622,53 @@ def get_payment_proof(booking_id: int):
 
 @app.post("/verify-payment-otp")
 def verify_payment_otp(request: OTPVerification):
-    logger.info(f"OTP verification request - Email: {request.email}, Phone: {request.phone}, OTP: {request.otp}")
+    logger.info(f"=== OTP VERIFICATION START ===")
+    logger.info(f"Raw request data - Email: '{request.email}', Phone: '{request.phone}', OTP: '{request.otp}'")
+    logger.info(f"Email is None: {request.email is None}, Email is empty: {request.email == ''}")
+    logger.info(f"Phone is None: {request.phone is None}, Phone is empty: {request.phone == ''}")
     
     # Handle both email and phone for backward compatibility
-    if request.email:
-        email = request.email
-        logger.info(f"Using email field: {email}")
-    elif request.phone:
+    if request.email and request.email.strip():
+        email = request.email.strip()
+        logger.info(f"✓ Using email field: '{email}'")
+    elif request.phone and request.phone.strip():
+        phone_value = request.phone.strip()
+        logger.info(f"Processing phone field: '{phone_value}'")
+        
         # Check if phone field actually contains an email
-        if '@' in request.phone:
-            email = request.phone
-            logger.info(f"Phone field contains email: {email}")
+        if '@' in phone_value:
+            email = phone_value
+            logger.info(f"✓ Phone field contains email: '{email}'")
         else:
             # Look up email by phone
-            logger.info(f"Looking up email by phone: {request.phone}")
+            logger.info(f"Looking up email by phone: '{phone_value}'")
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT customer_email FROM bookings WHERE customer_phone = %s ORDER BY created_at DESC LIMIT 1", (request.phone,))
+            cursor.execute("SELECT customer_email FROM bookings WHERE customer_phone = %s ORDER BY created_at DESC LIMIT 1", (phone_value,))
             result = cursor.fetchone()
             cursor.close()
             conn.close()
             
             if not result:
-                logger.error(f"No booking found for phone: {request.phone}")
+                logger.error(f"❌ No booking found for phone: '{phone_value}'")
                 raise HTTPException(status_code=400, detail="No booking found for this phone number")
             email = result['customer_email']
-            logger.info(f"Found email by phone lookup: {email}")
+            logger.info(f"✓ Found email by phone lookup: '{email}'")
     else:
+        logger.error(f"❌ Both email and phone are empty or None")
+        logger.error(f"Request email: '{request.email}' (type: {type(request.email)})")
+        logger.error(f"Request phone: '{request.phone}' (type: {type(request.phone)})")
         raise HTTPException(status_code=400, detail="Either email or phone is required")
     
+    logger.info(f"Attempting to verify OTP for email: '{email}' with OTP: '{request.otp}'")
     booking_id = verify_otp(email, request.otp)
+    logger.info(f"OTP verification result - Booking ID: {booking_id}")
     
     if not booking_id:
+        logger.error(f"❌ OTP verification failed for email: '{email}' with OTP: '{request.otp}'")
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+    
+    logger.info(f"✓ OTP verification successful for booking ID: {booking_id}")
     
     # Update booking to pending approval
     update_booking_status(booking_id, "pending_approval")
