@@ -14,6 +14,7 @@ import boto3
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 from logger_config import logger
+import traceback
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,6 +22,14 @@ logger.info("Starting Movie Booking API...")
 
 
 app = FastAPI()
+
+# Add exception handler for better error logging
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Global exception handler caught: {exc}")
+    logger.error(f"Request URL: {request.url}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    return {"error": "Internal server error", "detail": str(exc)}
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,25 +63,27 @@ admin_sessions = set()
 
 
 # AWS configuration
-AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
+AWS_REGION = os.getenv('AWS_REGION', 'ap-southeast-3')
 SES_FROM_EMAIL = os.getenv('SES_FROM_EMAIL', 'noreply@yourdomain.com')
-S3_BUCKET = os.getenv('S3_BUCKET', 'bamboo-movies-payment-receipt')
+S3_BUCKET = os.getenv('S3_BUCKET', 'bamboo-movies')
 
 # Initialize AWS clients
 try:
+    # SES is always in us-east-1
     ses_client = boto3.client(
         'ses',
-        region_name=AWS_REGION,
+        region_name='us-east-1',
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
     )
+    # S3 uses the configured region
     s3_client = boto3.client(
         's3',
         region_name=AWS_REGION,
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
     )
-    logger.info(f"AWS services initialized with region: {AWS_REGION}")
+    logger.info(f"AWS services initialized - SES: us-east-1, S3: {AWS_REGION}")
 except Exception as e:
     ses_client = None
     s3_client = None
@@ -342,7 +353,7 @@ async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
         logger.info(f"Generated OTP for booking {booking_id}: {otp}")
         
         # Store OTP in database
-        store_otp(booking['customer_email'], otp, booking_id, expires_at)
+        store_otp(booking['customer_phone'], otp, booking_id, expires_at)
         logger.info(f"OTP stored for email: {booking['customer_email']}")
         
         # Get detailed booking information for email
@@ -379,8 +390,8 @@ async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
             logger.info(f"OTP email sent successfully to {booking['customer_email']}")
             return {"message": "Payment uploaded. Check email for verification OTP.", "requires_otp": True}
         else:
-            logger.warning(f"Email sending failed, returning OTP in response")
-            return {"message": f"Payment uploaded. OTP: {otp} (Demo mode)", "requires_otp": True}
+            logger.warning(f"Email sending failed")
+            return {"message": "Payment uploaded. Check email for verification OTP.", "requires_otp": True}
             
     except HTTPException:
         raise
@@ -697,4 +708,4 @@ if os.path.exists("static"):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
