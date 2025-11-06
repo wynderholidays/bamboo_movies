@@ -1,27 +1,61 @@
 -- Movie Booking System Database Schema
 -- PostgreSQL Database Structure
 
--- Create database (run this first)
--- CREATE DATABASE movie_booking;
-
--- Connect to the database and run the following:
-
--- 1. Bookings table - Main booking records
-CREATE TABLE bookings (
+-- 1. Movies table
+CREATE TABLE IF NOT EXISTS movies (
     id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    poster_url VARCHAR(500),
+    duration_minutes INTEGER DEFAULT 120,
+    genre VARCHAR(100),
+    rating VARCHAR(20),
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Theaters table
+CREATE TABLE IF NOT EXISTS theaters (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    address TEXT,
+    rows INTEGER DEFAULT 11,
+    left_cols INTEGER DEFAULT 8,
+    right_cols INTEGER DEFAULT 6,
+    non_selectable_seats TEXT[],
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Showtimes table
+CREATE TABLE IF NOT EXISTS showtimes (
+    id SERIAL PRIMARY KEY,
+    movie_id INTEGER REFERENCES movies(id),
+    theater_id INTEGER REFERENCES theaters(id),
+    show_date DATE NOT NULL,
+    show_time TIME NOT NULL,
+    price INTEGER NOT NULL DEFAULT 200000,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. Bookings table
+CREATE TABLE IF NOT EXISTS bookings (
+    id SERIAL PRIMARY KEY,
+    showtime_id INTEGER REFERENCES showtimes(id),
     customer_name VARCHAR(255) NOT NULL,
     customer_email VARCHAR(255) NOT NULL,
     customer_phone VARCHAR(20) NOT NULL,
-    seats TEXT[] NOT NULL,  -- Array of seat IDs like ['A1', 'A2']
+    seats TEXT[] NOT NULL,
     total_amount INTEGER NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending_payment',
-    payment_proof VARCHAR(500),  -- File path to payment proof
+    payment_proof VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. OTP Storage table - Email verification codes
-CREATE TABLE otp_storage (
+-- 5. OTP Storage table
+CREATE TABLE IF NOT EXISTS otp_storage (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
     otp VARCHAR(6) NOT NULL,
@@ -30,51 +64,43 @@ CREATE TABLE otp_storage (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. Admin Sessions table - Admin login sessions
-CREATE TABLE admin_sessions (
+-- 6. Seat Reservations table
+CREATE TABLE IF NOT EXISTS seat_reservations (
     id SERIAL PRIMARY KEY,
-    session_token VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP NOT NULL
-);
-
--- 4. Seat Reservations table - Temporary seat holds
-CREATE TABLE seat_reservations (
-    id SERIAL PRIMARY KEY,
-    seat_id VARCHAR(10) NOT NULL,  -- Like 'A1', 'B5'
+    showtime_id INTEGER REFERENCES showtimes(id),
+    seat_id VARCHAR(10) NOT NULL,
     user_id VARCHAR(255) NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. Theater Configuration table - Theater settings
-CREATE TABLE theater_config (
+-- 7. Admin Settings table
+CREATE TABLE IF NOT EXISTS admin_settings (
     id SERIAL PRIMARY KEY,
-    movie_name VARCHAR(255) NOT NULL,
-    theater_name VARCHAR(255) NOT NULL,
-    showtime VARCHAR(50) NOT NULL,
-    price INTEGER NOT NULL,
-    rows INTEGER NOT NULL,
-    left_cols INTEGER NOT NULL,
-    right_cols INTEGER NOT NULL,
-    non_selectable_seats TEXT[],  -- Array of non-selectable seats
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    admin_name VARCHAR(255) DEFAULT 'Admin',
+    admin_email VARCHAR(255) DEFAULT 'admin@bambooholiday.com',
+    notification_enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default theater configuration
-INSERT INTO theater_config (
-    movie_name, theater_name, showtime, price, 
-    rows, left_cols, right_cols, non_selectable_seats
-) VALUES (
-    'Avengers: Endgame',
-    'PVR Cinemas', 
-    '7:00 PM',
-    200,
-    11,
-    8,
-    6,
-    ARRAY['C1', 'C2', 'D1', 'D2', 'E1', 'E2', 'F1', 'F2', 'G1', 'G2', 'H1', 'H2', 'I1', 'I2', 'J1', 'J2', 'K1', 'K2']
-);
+-- Insert sample data
+INSERT INTO movies (title, poster_url, duration_minutes, genre, rating, description) VALUES 
+('Avengers: Endgame', 'https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg', 181, 'Action, Adventure, Drama', 'PG-13', 'The epic conclusion to the Infinity Saga'),
+('Spider-Man: No Way Home', 'https://image.tmdb.org/t/p/w500/1g0dhYtq4irTY1GPXvft6k4YLjm.jpg', 148, 'Action, Adventure, Sci-Fi', 'PG-13', 'Spider-Man faces villains from across the multiverse')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO theaters (name, address, rows, left_cols, right_cols, non_selectable_seats) VALUES 
+('PVR Cinemas Jakarta', 'Grand Indonesia Mall, Jakarta', 11, 8, 6, ARRAY['A1', 'A14', 'K1', 'K14']),
+('CGV Blitz Senayan', 'Senayan City Mall, Jakarta', 10, 7, 7, ARRAY['A1', 'A14', 'J1', 'J14'])
+ON CONFLICT DO NOTHING;
+
+INSERT INTO showtimes (movie_id, theater_id, show_date, show_time, price) VALUES 
+(1, 1, CURRENT_DATE, '19:00', 200000),
+(1, 1, CURRENT_DATE, '21:30', 200000),
+(2, 1, CURRENT_DATE + 1, '18:00', 200000),
+(2, 2, CURRENT_DATE + 1, '20:30', 200000)
+ON CONFLICT DO NOTHING;
 
 -- Create indexes for better performance
 CREATE INDEX idx_bookings_status ON bookings(status);
