@@ -51,7 +51,13 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
   const [paymentOtp, setPaymentOtp] = useState('');
   const [isBooking, setIsBooking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [toast, setToast] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
   const [userId] = useState(() => Math.random().toString(36).substr(2, 9));
+
+  const showToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
+    setToast({message, type});
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     const initializePage = async () => {
@@ -219,19 +225,19 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
 
   const handleConfirmBooking = async () => {
     if (!customerInfo.name || !customerInfo.email || !customerInfo.phone || selectedSeats.length === 0) {
-      alert('Please fill all details and select seats');
+      showToast('Please fill all details and select seats', 'error');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(customerInfo.email)) {
-      alert('Please enter a valid email address');
+      showToast('Please enter a valid email address', 'error');
       return;
     }
     
     const phoneRegex = /^\+?[1-9]\d{1,14}$/;
     if (!phoneRegex.test(customerInfo.phone)) {
-      alert('Please enter a valid phone number with country code (e.g., +1234567890)');
+      showToast('Please enter a valid phone number with country code (e.g., +1234567890)', 'error');
       return;
     }
 
@@ -244,12 +250,12 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     console.log('Booking response:', bookingResponse);
     
     if (!paymentFile) {
-      alert('Please select a file first');
+      showToast('Please select a file first', 'error');
       return;
     }
     
     if (!bookingResponse) {
-      alert('Booking information not found. Please try booking again.');
+      showToast('Booking information not found. Please try booking again.', 'error');
       return;
     }
 
@@ -270,18 +276,18 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         console.log('Upload response data:', data);
         if (data.requires_otp) {
           setShowPaymentOTP(true);
-          alert(data.message);
+          showToast(data.message, 'success');
         } else {
           navigate('/success');
         }
       } else {
         const error = await response.text();
         console.error('Upload failed:', error);
-        alert('Upload failed: ' + error);
+        showToast('Upload failed: ' + error, 'error');
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Upload failed: ' + (error instanceof Error ? error.message : String(error)));
+      showToast('Upload failed: ' + (error instanceof Error ? error.message : String(error)), 'error');
     }
   };
 
@@ -298,11 +304,11 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         navigate('/success');
       } else {
         const error = await response.json();
-        alert(error.detail);
+        showToast(error.detail, 'error');
       }
     } catch (error) {
       console.error('OTP verification error:', error);
-      alert('OTP verification failed');
+      showToast('OTP verification failed', 'error');
     }
   };
 
@@ -323,6 +329,23 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
 
   return (
     <div className="App">
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          color: 'white',
+          background: toast.type === 'error' ? '#f44336' : toast.type === 'success' ? '#4caf50' : '#2196f3',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          maxWidth: '400px',
+          fontSize: '14px'
+        }}>
+          {toast.message}
+        </div>
+      )}
       <header>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
           {theaterInfo?.movie_poster && (
