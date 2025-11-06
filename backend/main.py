@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -294,7 +294,7 @@ def get_showtime_info(showtime_id: int):
     }
 
 @app.post("/reserve-seats")
-def reserve_seats_endpoint(reservation: SeatReservation, request):
+def reserve_seats_endpoint(reservation: SeatReservation, request: Request):
     # Anti-abuse: Check IP-based limits
     client_ip = request.headers.get('x-real-ip') or request.client.host
     
