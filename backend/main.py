@@ -15,6 +15,10 @@ from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 from logger_config import logger
 import traceback
+import jwt
+import bcrypt
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends
 
 # Load environment variables from .env file
 load_dotenv()
@@ -130,10 +134,19 @@ def send_email(to_email, subject, body):
         logger.error(f"Email send error: {e}")
         return False
 
-# Admin credentials
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin123"
-admin_sessions = set()
+# Security configuration
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-super-secret-jwt-key-change-in-production')
+JWT_ALGORITHM = 'HS256'
+JWT_EXPIRATION_HOURS = 24
+
+# Admin credentials - MUST be set in environment variables for production
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')  # bcrypt hash
+ADMIN_PLAIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'BambooMovies2024!@#')  # fallback for dev
+
+# Security
+security = HTTPBearer()
+ADMIN_IPS = os.getenv('ADMIN_IPS', '').split(',') if os.getenv('ADMIN_IPS') else []
 
 # Get showtime layout for booking
 def get_showtime_layout(showtime_id):
@@ -430,22 +443,64 @@ def get_booking(booking_id: int):
         raise HTTPException(status_code=404, detail="Booking not found")
     return booking
 
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify password against hash"""
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+def create_jwt_token(username: str) -> str:
+    """Create JWT token"""
+    payload = {
+        'username': username,
+        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
+        'iat': datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+def verify_jwt_token(token: str) -> dict:
+    """Verify JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 @app.post("/admin/login")
 def admin_login(credentials: AdminLogin):
-    print(f"Login attempt - Username: {credentials.username}, Password: {credentials.password}")
-    print(f"Expected - Username: {ADMIN_USERNAME}, Password: {ADMIN_PASSWORD}")
+    logger.info(f"Admin login attempt for username: {credentials.username}")
     
-    if credentials.username != ADMIN_USERNAME or credentials.password != ADMIN_PASSWORD:
-        print("Login failed: Invalid credentials")
+    # Verify credentials
+    if credentials.username != ADMIN_USERNAME:
+        logger.warning(f"Invalid username attempt: {credentials.username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    session_token = str(random.randint(100000000, 999999999))
-    admin_sessions.add(session_token)
-    print(f"Login successful: Token {session_token}")
-    return {"access_token": session_token, "token_type": "bearer"}
+    # Check password (hash if available, plain as fallback)
+    password_valid = False
+    if ADMIN_PASSWORD_HASH:
+        password_valid = verify_password(credentials.password, ADMIN_PASSWORD_HASH)
+    else:
+        password_valid = credentials.password == ADMIN_PLAIN_PASSWORD
+    
+    if not password_valid:
+        logger.warning(f"Invalid password attempt for user: {credentials.username}")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Create JWT token
+    token = create_jwt_token(credentials.username)
+    logger.info(f"Admin login successful for: {credentials.username}")
+    
+    return {"access_token": token, "token_type": "bearer", "expires_in": JWT_EXPIRATION_HOURS * 3600}
+
+def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Verify admin JWT token"""
+    payload = verify_jwt_token(credentials.credentials)
+    if payload['username'] != ADMIN_USERNAME:
+        raise HTTPException(status_code=401, detail="Invalid user")
+    return payload
 
 @app.get("/bookings")
-def get_all_bookings_endpoint():
+def get_all_bookings_endpoint(admin: dict = Depends(get_current_admin)):
     return get_all_bookings()
 
 @app.get("/payment-proof/{booking_id}")
