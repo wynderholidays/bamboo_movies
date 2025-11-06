@@ -276,7 +276,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                         className={`seat ${seatClass}`}
                         onClick={() => toggleSeat(seatId)}
                       >
-                        {col + 1}
+                        {seatId}
                       </div>
                     );
                   })}
@@ -305,7 +305,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                         className={`seat ${seatClass}`}
                         onClick={() => toggleSeat(seatId)}
                       >
-                        {col + theaterInfo.left_cols + 1}
+                        {seatId}
                       </div>
                     );
                   })}

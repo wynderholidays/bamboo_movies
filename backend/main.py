@@ -48,6 +48,15 @@ async def global_exception_handler(request, exc):
     logger.error(f"Request method: {request.method}")
     logger.error(f"Request headers: {dict(request.headers)}")
     logger.error(f"Traceback: {traceback.format_exc()}")
+    
+    # Try to read request body for POST requests
+    try:
+        if request.method == "POST":
+            body = await request.body()
+            logger.error(f"Request body: {body.decode('utf-8') if body else 'Empty'}")
+    except:
+        pass
+    
     return {"error": "Internal server error", "detail": str(exc)}
 
 app.add_middleware(
@@ -308,37 +317,49 @@ def reserve_seats_endpoint(reservation: SeatReservation):
 @app.post("/book")
 def create_booking_endpoint(booking: BookingRequest):
     logger.info(f"Creating booking for showtime {booking.showtime_id}, customer: {booking.customer_name}, seats: {booking.selected_seats}")
-    # Check if seats are still available
-    booked_seats = get_booked_seats(booking.showtime_id)
     
-    for seat in booking.selected_seats:
-        if seat in booked_seats:
-            raise HTTPException(status_code=400, detail=f"Seat {seat} is already booked")
-    
-    showtime_layout = get_showtime_layout(booking.showtime_id)
-    if not showtime_layout:
-        raise HTTPException(status_code=404, detail="Showtime not found")
-    
-    total_amount = len(booking.selected_seats) * showtime_layout["price"]
-    
-    # Create booking in database
-    booking_id = create_booking(
-        booking.showtime_id,
-        booking.customer_name,
-        booking.customer_email, 
-        booking.customer_phone,
-        booking.selected_seats,
-        total_amount
-    )
-    
-    logger.info(f"Booking created successfully: ID {booking_id}, Amount: Rp {total_amount:,}")
-    
-    return {
-        "booking_id": booking_id,
-        "total_amount": total_amount,
-        "status": "pending_payment",
-        "message": "Booking created. Please upload payment proof."
-    }
+    try:
+        # Check if seats are still available
+        booked_seats = get_booked_seats(booking.showtime_id)
+        logger.info(f"Currently booked seats for showtime {booking.showtime_id}: {booked_seats}")
+        
+        for seat in booking.selected_seats:
+            if seat in booked_seats:
+                logger.error(f"Seat {seat} is already booked")
+                raise HTTPException(status_code=400, detail=f"Seat {seat} is already booked")
+        
+        showtime_layout = get_showtime_layout(booking.showtime_id)
+        if not showtime_layout:
+            logger.error(f"Showtime {booking.showtime_id} not found")
+            raise HTTPException(status_code=404, detail="Showtime not found")
+        
+        total_amount = len(booking.selected_seats) * showtime_layout["price"]
+        logger.info(f"Calculated total amount: {total_amount} for {len(booking.selected_seats)} seats at {showtime_layout['price']} each")
+        
+        # Create booking in database
+        booking_id = create_booking(
+            booking.showtime_id,
+            booking.customer_name,
+            booking.customer_email, 
+            booking.customer_phone,
+            booking.selected_seats,
+            total_amount
+        )
+        
+        logger.info(f"Booking created successfully: ID {booking_id}, Amount: Rp {total_amount:,}")
+        
+        return {
+            "booking_id": booking_id,
+            "total_amount": total_amount,
+            "status": "pending_payment",
+            "message": "Booking created. Please upload payment proof."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in create_booking_endpoint: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.post("/upload-payment/{booking_id}")
 async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
