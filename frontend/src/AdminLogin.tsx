@@ -108,18 +108,7 @@ const AdminLogin: React.FC<Props> = ({ onLogin }) => {
           </button>
         </form>
         
-        <div style={{ 
-          marginTop: '20px', 
-          padding: '15px', 
-          background: '#f0f0f0', 
-          borderRadius: '5px',
-          fontSize: '14px',
-          color: '#666'
-        }}>
-          <strong>Demo Credentials:</strong><br />
-          Username: admin<br />
-          Password: BambooAdmin1989&*
-        </div>
+
       </div>
     </div>
   );
