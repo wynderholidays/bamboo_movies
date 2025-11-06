@@ -36,7 +36,8 @@ interface Props {
   selectedShowtimeId: number | null;
 }
 
-const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeId }) => {
+const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeId: propShowtimeId }) => {
+  const [selectedShowtimeId, setSelectedShowtimeId] = useState<number | null>(propShowtimeId);
   const [theaterInfo, setTheaterInfo] = useState<TheaterInfo | null>(null);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [customerInfo, setCustomerInfo] = useState({
@@ -52,6 +53,15 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
   const [userId] = useState(() => Math.random().toString(36).substr(2, 9));
 
   useEffect(() => {
+    // Restore selectedShowtimeId from sessionStorage if not provided
+    if (!selectedShowtimeId && (currentRoute.includes('/payment') || currentRoute.includes('/success'))) {
+      const storedShowtimeId = sessionStorage.getItem('selectedShowtimeId');
+      if (storedShowtimeId) {
+        console.log('Restoring selectedShowtimeId from sessionStorage:', storedShowtimeId);
+        setSelectedShowtimeId(parseInt(storedShowtimeId));
+      }
+    }
+    
     if (selectedShowtimeId) {
       fetchTheaterInfo();
     }
