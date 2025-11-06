@@ -47,6 +47,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [showPaymentOTP, setShowPaymentOTP] = useState(false);
   const [paymentOtp, setPaymentOtp] = useState('');
+  const [isBooking, setIsBooking] = useState(false);
+  const [userId] = useState(() => Math.random().toString(36).substr(2, 9));
 
   useEffect(() => {
     if (selectedShowtimeId) {
@@ -70,7 +72,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     return `${String.fromCharCode(65 + row)}${col}`;
   };
 
-  const toggleSeat = (seatId: string) => {
+  const toggleSeat = async (seatId: string) => {
     // Check if seat is unavailable
     const isUnavailable = theaterInfo?.pending_approval_seats?.includes(seatId) ||
                          theaterInfo?.approved_seats?.includes(seatId) ||
@@ -80,14 +82,43 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     
     if (isUnavailable) return;
     
-    setSelectedSeats(prev => 
-      prev.includes(seatId) 
-        ? prev.filter(s => s !== seatId)
-        : [...prev, seatId]
-    );
+    const isCurrentlySelected = selectedSeats.includes(seatId);
+    
+    if (isCurrentlySelected) {
+      // Deselecting seat - remove reservation
+      setSelectedSeats(prev => prev.filter(s => s !== seatId));
+    } else {
+      // Selecting seat - reserve it
+      try {
+        const response = await fetch('/api/reserve-seats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            showtime_id: selectedShowtimeId,
+            seats: [seatId],
+            user_id: userId
+          })
+        });
+        
+        if (response.ok) {
+          setSelectedSeats(prev => [...prev, seatId]);
+          fetchTheaterInfo(); // Refresh to show updated reservations
+        } else {
+          const error = await response.json();
+          alert(error.detail || 'Seat no longer available');
+          fetchTheaterInfo();
+        }
+      } catch (error) {
+        console.error('Seat reservation error:', error);
+        alert('Failed to reserve seat');
+      }
+    }
   };
 
   const createBooking = async () => {
+    if (isBooking) return; // Prevent double booking
+    
+    setIsBooking(true);
     try {
       const response = await fetch('/api/book', {
         method: 'POST',
@@ -107,12 +138,14 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         navigate(`/payment/${selectedShowtimeId}`);
       } else {
         const error = await response.json();
-        alert(error.detail);
-        fetchTheaterInfo();
+        alert(error.detail || 'Booking failed');
+        fetchTheaterInfo(); // Refresh seat availability
       }
     } catch (error) {
       console.error('Booking error:', error);
-      alert('Booking failed');
+      alert('Booking failed - please try again');
+    } finally {
+      setIsBooking(false);
     }
   };
 
@@ -318,8 +351,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
           <div className="legend">
             <span className="available">Available</span>
             <span className="selected">Selected</span>
+            <span className="reserved">Reserved (5 min)</span>
             <span className="pending-approval">Pending Approval</span>
-
             <span className="confirmed">Confirmed</span>
             <span className="non-selectable">Not Available</span>
           </div>
@@ -351,7 +384,16 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                 <p>Total Amount: Rp {(selectedSeats.length * theaterInfo.price).toLocaleString()}</p>
               </div>
               
-              <button onClick={handleConfirmBooking}>Confirm Booking</button>
+              <button 
+                onClick={handleConfirmBooking} 
+                disabled={isBooking}
+                style={{
+                  opacity: isBooking ? 0.6 : 1,
+                  cursor: isBooking ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isBooking ? 'Processing...' : 'Confirm Booking'}
+              </button>
             </div>
           )}
         </div>

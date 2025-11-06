@@ -294,7 +294,26 @@ def get_showtime_info(showtime_id: int):
     }
 
 @app.post("/reserve-seats")
-def reserve_seats_endpoint(reservation: SeatReservation):
+def reserve_seats_endpoint(reservation: SeatReservation, request):
+    # Anti-abuse: Check IP-based limits
+    client_ip = request.headers.get('x-real-ip') or request.client.host
+    
+    # Check current reservations by this IP
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) as count FROM seat_reservations 
+        WHERE user_id LIKE %s AND expires_at > NOW()
+    """, (f"{client_ip}_%",))
+    result = cursor.fetchone()
+    current_reservations = result['count'] if result else 0
+    cursor.close()
+    conn.close()
+    
+    # Limit: Max 4 seats reserved per IP
+    if current_reservations >= 4:
+        raise HTTPException(status_code=429, detail="Too many seats reserved. Please complete your booking first.")
+    
     # Check if seats are available
     booked_seats = get_booked_seats(reservation.showtime_id)
     reserved_by_others = check_seat_availability(reservation.showtime_id, reservation.seats, reservation.user_id)
@@ -308,9 +327,10 @@ def reserve_seats_endpoint(reservation: SeatReservation):
         raise HTTPException(status_code=400, 
                           detail=f"Seats {', '.join(unavailable_seats)} are no longer available")
     
-    # Reserve seats for 10 minutes
-    expires_at = datetime.now() + timedelta(minutes=10)
-    reserve_seats(reservation.showtime_id, reservation.seats, reservation.user_id, expires_at)
+    # Reserve seats for 5 minutes with IP tracking
+    expires_at = datetime.now() + timedelta(minutes=5)
+    user_id_with_ip = f"{client_ip}_{reservation.user_id}"
+    reserve_seats(reservation.showtime_id, reservation.seats, user_id_with_ip, expires_at)
     
     return {"message": "Seats reserved successfully", "expires_at": expires_at.isoformat()}
 
