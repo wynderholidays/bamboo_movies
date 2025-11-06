@@ -37,6 +37,12 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'management' | 'settings'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [bookingStats, setBookingStats] = useState<Record<string, number>>({});
+  const [toast, setToast] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
+
+  const showToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
+    setToast({message, type});
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     // Check authentication on component mount
@@ -115,13 +121,13 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
       
       if (response.ok) {
         fetchBookings();
-        alert(`Booking ${bookingId} ${status} successfully`);
+        showToast(`Booking ${bookingId} ${status} successfully`, 'success');
       } else {
-        alert('Failed to update booking status');
+        showToast('Failed to update booking status', 'error');
       }
     } catch (error) {
       console.error('Error updating booking:', error);
-      alert('Failed to update booking status');
+      showToast('Failed to update booking status', 'error');
     }
   };
 
@@ -134,11 +140,11 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
         const url = URL.createObjectURL(blob);
         setSelectedProof(url);
       } else {
-        alert('Payment proof not found');
+        showToast('Payment proof not found', 'error');
       }
     } catch (error) {
       console.error('Error fetching payment proof:', error);
-      alert('Failed to load payment proof');
+      showToast('Failed to load payment proof', 'error');
     }
   };
 
@@ -159,6 +165,25 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          color: 'white',
+          background: toast.type === 'error' ? '#f44336' : toast.type === 'success' ? '#4caf50' : '#2196f3',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          maxWidth: 'calc(100vw - 40px)',
+          fontSize: '14px',
+          textAlign: 'center'
+        }}>
+          {toast.message}
+        </div>
+      )}
       <nav style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => navigate('/booking')} style={{ padding: '10px 20px' }}>

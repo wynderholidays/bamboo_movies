@@ -8,6 +8,12 @@ interface Props {
 const AdminLogin: React.FC<Props> = ({ onLogin }) => {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
+
+  const showToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
+    setToast({message, type});
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,11 +31,11 @@ const AdminLogin: React.FC<Props> = ({ onLogin }) => {
         authUtils.setToken(data.access_token);
         onLogin(data.access_token);
       } else {
-        alert('Invalid credentials');
+        showToast('Invalid credentials', 'error');
       }
     } catch (error) {
       console.error('Login error:', error);
-      alert('Login failed');
+      showToast('Login failed', 'error');
     } finally {
       setLoading(false);
     }
@@ -43,6 +49,25 @@ const AdminLogin: React.FC<Props> = ({ onLogin }) => {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
     }}>
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          color: 'white',
+          background: toast.type === 'error' ? '#f44336' : toast.type === 'success' ? '#4caf50' : '#2196f3',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          maxWidth: 'calc(100vw - 40px)',
+          fontSize: '14px',
+          textAlign: 'center'
+        }}>
+          {toast.message}
+        </div>
+      )}
       <div style={{
         background: 'white',
         padding: '40px',
