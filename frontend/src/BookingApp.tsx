@@ -333,15 +333,20 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         <div style={{
           position: 'fixed',
           top: '20px',
-          right: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
           padding: '12px 20px',
           borderRadius: '8px',
           color: 'white',
           background: toast.type === 'error' ? '#f44336' : toast.type === 'success' ? '#4caf50' : '#2196f3',
           zIndex: 1000,
           boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-          maxWidth: '400px',
-          fontSize: '14px'
+          maxWidth: 'calc(100vw - 40px)',
+          width: 'auto',
+          minWidth: '200px',
+          fontSize: '14px',
+          textAlign: 'center',
+          wordWrap: 'break-word'
         }}>
           {toast.message}
         </div>
