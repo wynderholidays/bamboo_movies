@@ -55,7 +55,16 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     if (selectedShowtimeId) {
       fetchTheaterInfo();
     }
-  }, [selectedShowtimeId]);
+    
+    // Restore booking data from sessionStorage if on payment page
+    if (currentRoute.includes('/payment') && !bookingResponse) {
+      const storedBooking = sessionStorage.getItem('bookingResponse');
+      if (storedBooking) {
+        console.log('Restoring booking data from sessionStorage');
+        setBookingResponse(JSON.parse(storedBooking));
+      }
+    }
+  }, [selectedShowtimeId, currentRoute]);
 
   const fetchTheaterInfo = async () => {
     if (!selectedShowtimeId) return;
@@ -137,6 +146,10 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         console.log('Current route before navigation:', currentRoute);
         console.log('Target route:', `/payment/${selectedShowtimeId}`);
         
+        // Store booking data in sessionStorage for persistence
+        sessionStorage.setItem('bookingResponse', JSON.stringify(data));
+        console.log('Stored booking data in sessionStorage');
+        
         // Try navigate first
         navigate(`/payment/${selectedShowtimeId}`);
         
@@ -187,10 +200,23 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
   };
 
   const handlePaymentUpload = async () => {
-    if (!paymentFile || !bookingResponse) return;
+    console.log('Payment upload clicked');
+    console.log('Payment file:', paymentFile);
+    console.log('Booking response:', bookingResponse);
+    
+    if (!paymentFile) {
+      alert('Please select a file first');
+      return;
+    }
+    
+    if (!bookingResponse) {
+      alert('Booking information not found. Please try booking again.');
+      return;
+    }
 
     const formData = new FormData();
     formData.append('file', paymentFile);
+    console.log('Uploading to:', `/api/upload-payment/${bookingResponse.booking_id}`);
 
     try {
       const response = await fetch(`/api/upload-payment/${bookingResponse.booking_id}`, {
@@ -198,8 +224,11 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         body: formData
       });
 
+      console.log('Upload response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Upload response data:', data);
         if (data.requires_otp) {
           setShowPaymentOTP(true);
           alert(data.message);
@@ -207,11 +236,13 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
           navigate('/success');
         }
       } else {
-        alert('Upload failed');
+        const error = await response.text();
+        console.error('Upload failed:', error);
+        alert('Upload failed: ' + error);
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Upload failed');
+      alert('Upload failed: ' + error.message);
     }
   };
 
@@ -434,10 +465,29 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
             <input
               type="file"
               accept="image/*"
-              onChange={(e) => setPaymentFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                console.log('File selected:', file?.name);
+                setPaymentFile(file);
+              }}
               required
             />
-            <button onClick={handlePaymentUpload} disabled={!paymentFile}>
+            <button 
+              onClick={() => {
+                console.log('Button clicked!');
+                handlePaymentUpload();
+              }} 
+              disabled={!paymentFile}
+              style={{
+                padding: '12px 24px',
+                background: paymentFile ? '#ff9800' : '#ccc',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: paymentFile ? 'pointer' : 'not-allowed',
+                fontSize: '16px'
+              }}
+            >
               Upload Proof & Submit
             </button>
           </div>
