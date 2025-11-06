@@ -386,77 +386,7 @@ async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.error(f"Unexpected error in upload_payment_proof: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")ef upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
-    booking = get_booking_by_id(booking_id)
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    
-    # Upload to S3
-    try:
-        file_key = f"payment-proofs/{booking_id}_{file.filename}"
-        content = await file.read()
-        
-        if s3_client:
-            s3_client.put_object(
-                Bucket=S3_BUCKET,
-                Key=file_key,
-                Body=content,
-                ContentType=file.content_type or 'image/jpeg'
-            )
-            file_url = f"https://{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{file_key}"
-        else:
-            # Fallback to local storage for development
-            os.makedirs("uploads", exist_ok=True)
-            file_url = f"uploads/{booking_id}_{file.filename}"
-            with open(file_url, "wb") as buffer:
-                buffer.write(content)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
-    
-    # Update booking with payment proof
-    update_booking_payment_proof(booking_id, file_url)
-    
-    # Generate OTP for email verification
-    otp = str(random.randint(100000, 999999))
-    expires_at = datetime.now() + timedelta(minutes=5)
-    
-    # Store OTP in database
-    store_otp(booking['customer_email'], otp, booking_id, expires_at)
-    
-    # Get detailed booking information for email
-    showtime_layout = get_showtime_layout(booking['showtime_id'])
-    
-    # Send OTP email with detailed booking information
-    subject = f"Payment Verification - Booking #{booking_id}"
-    body = f"""
-    <h2>🎬 Payment Verification Required</h2>
-    <p>Dear {booking['customer_name']},</p>
-    <p>Your payment proof has been uploaded successfully for the following booking:</p>
-    
-    <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px 0;">
-        <h3>📋 Booking Details:</h3>
-        <p><strong>Booking ID:</strong> #{booking_id}</p>
-        <p><strong>Movie:</strong> {showtime_layout['movie'] if showtime_layout else 'N/A'}</p>
-        <p><strong>Theater:</strong> {showtime_layout['theater'] if showtime_layout else 'N/A'}</p>
-        <p><strong>Address:</strong> {showtime_layout.get('address', 'N/A') if showtime_layout else 'N/A'}</p>
-        <p><strong>Show Date:</strong> {showtime_layout['show_date'] if showtime_layout else 'N/A'}</p>
-        <p><strong>Show Time:</strong> {showtime_layout['showtime'] if showtime_layout else 'N/A'}</p>
-        <p><strong>Selected Seats:</strong> {', '.join(booking['seats'])}</p>
-        <p><strong>Total Amount:</strong> Rp {booking['total_amount']:,}</p>
-    </div>
-    
-    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <p><strong>🔐 Verification OTP:</strong> <span style="font-size: 24px; font-weight: bold; color: #007bff;">{otp}</span></p>
-        <p><em>This OTP is valid for 5 minutes only.</em></p>
-    </div>
-    
-    <p>Please enter this OTP to verify your payment and proceed with booking confirmation.</p>
-    """
-    
-    if send_email(booking['customer_email'], subject, body):
-        return {"message": "Payment uploaded. Check email for verification OTP.", "requires_otp": True}
-    else:
-        return {"message": f"Payment uploaded. OTP: {otp} (Demo mode)", "requires_otp": True}
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/booking/{booking_id}")
 def get_booking(booking_id: int):
