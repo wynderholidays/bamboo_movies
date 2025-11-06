@@ -156,7 +156,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         // Store booking and customer data in sessionStorage for persistence
         sessionStorage.setItem('bookingResponse', JSON.stringify(data));
         sessionStorage.setItem('customerInfo', JSON.stringify(customerInfo));
-        sessionStorage.setItem('selectedShowtimeId', selectedShowtimeId.toString());
+        if (selectedShowtimeId) sessionStorage.setItem('selectedShowtimeId', selectedShowtimeId.toString());
         sessionStorage.setItem('selectedSeats', JSON.stringify(selectedSeats));
         console.log('Stored booking and customer data in sessionStorage');
         
