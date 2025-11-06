@@ -474,12 +474,15 @@ def verify_payment_otp(request: OTPVerification):
     # Handle both email and phone for backward compatibility
     if request.email:
         email = request.email
+        logger.info(f"Using email field: {email}")
     elif request.phone:
         # Check if phone field actually contains an email
         if '@' in request.phone:
             email = request.phone
+            logger.info(f"Phone field contains email: {email}")
         else:
             # Look up email by phone
+            logger.info(f"Looking up email by phone: {request.phone}")
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT customer_email FROM bookings WHERE customer_phone = %s ORDER BY created_at DESC LIMIT 1", (request.phone,))
@@ -488,8 +491,10 @@ def verify_payment_otp(request: OTPVerification):
             conn.close()
             
             if not result:
+                logger.error(f"No booking found for phone: {request.phone}")
                 raise HTTPException(status_code=400, detail="No booking found for this phone number")
             email = result['customer_email']
+            logger.info(f"Found email by phone lookup: {email}")
     else:
         raise HTTPException(status_code=400, detail="Either email or phone is required")
     
