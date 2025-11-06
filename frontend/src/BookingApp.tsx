@@ -325,10 +325,10 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     <div className="App">
       <header>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-          {theaterInfo.movie_poster && (
+          {theaterInfo?.movie_poster && (
             <img 
               src={theaterInfo.movie_poster} 
-              alt={theaterInfo.movie}
+              alt={theaterInfo?.movie}
               style={{ 
                 width: '120px', 
                 height: '180px', 
@@ -339,13 +339,13 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
             />
           )}
           <div style={{ flex: 1 }}>
-            <h1 style={{ margin: '0 0 10px 0' }}>{theaterInfo.movie}</h1>
-            <p style={{ margin: '5px 0', fontSize: '18px' }}>{theaterInfo.theater}</p>
-            {theaterInfo.show_date && (
+            <h1 style={{ margin: '0 0 10px 0' }}>{theaterInfo?.movie || 'Loading...'}</h1>
+            <p style={{ margin: '5px 0', fontSize: '18px' }}>{theaterInfo?.theater || 'Loading...'}</p>
+            {theaterInfo?.show_date && (
               <p style={{ margin: '5px 0', fontSize: '16px' }}>📅 {new Date(theaterInfo.show_date).toLocaleDateString()}</p>
             )}
-            <p style={{ margin: '5px 0', fontSize: '16px' }}>🕐 {theaterInfo.showtime}</p>
-            <p style={{ margin: '5px 0', fontSize: '18px', fontWeight: 'bold' }}>💰 Rp {theaterInfo.price.toLocaleString()} per seat</p>
+            <p style={{ margin: '5px 0', fontSize: '16px' }}>🕐 {theaterInfo?.showtime || 'Loading...'}</p>
+            <p style={{ margin: '5px 0', fontSize: '18px', fontWeight: 'bold' }}>💰 Rp {theaterInfo?.price?.toLocaleString() || '0'} per seat</p>
           </div>
         </div>
         {currentRoute === '/' && (
