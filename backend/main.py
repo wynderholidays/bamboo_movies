@@ -695,11 +695,11 @@ def verify_payment_otp(request: OTPVerification):
         cursor = conn.cursor()
         cursor.execute("SELECT admin_email FROM admin_settings ORDER BY id DESC LIMIT 1")
         result = cursor.fetchone()
-        admin_email = result['admin_email'] if result else os.getenv('ADMIN_EMAIL', 'admin@bambooholiday.com')
+        admin_email = result['admin_email'] if result else os.getenv('ADMIN_EMAIL', 'keralasamajam.indonesia@gmail.com')
         cursor.close()
         conn.close()
     except:
-        admin_email = os.getenv('ADMIN_EMAIL', 'admin@bambooholiday.com')
+        admin_email = os.getenv('ADMIN_EMAIL', 'keralasamajam.indonesia@gmail.com')
     
     if booking and showtime_layout:
         admin_subject = f"Payment Verified - Booking #{booking_id} Needs Approval"
@@ -933,7 +933,7 @@ def get_admin_settings_endpoint():
     else:
         # Return default settings
         return {
-            "admin_email": "admin@bambooholiday.com",
+            "admin_email": "keralasamajam.indonesia@gmail.com",
             "admin_name": "Admin",
             "notification_enabled": True
         }
