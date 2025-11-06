@@ -23,11 +23,26 @@ logger.info("Starting Movie Booking API...")
 
 app = FastAPI()
 
+# Add middleware for request logging
+@app.middleware("http")
+async def log_requests(request, call_next):
+    start_time = datetime.now()
+    logger.info(f"Request: {request.method} {request.url} - Headers: {dict(request.headers)}")
+    
+    response = await call_next(request)
+    
+    process_time = (datetime.now() - start_time).total_seconds()
+    logger.info(f"Response: {request.method} {request.url} - Status: {response.status_code} - Time: {process_time:.3f}s")
+    
+    return response
+
 # Add exception handler for better error logging
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     logger.error(f"Global exception handler caught: {exc}")
     logger.error(f"Request URL: {request.url}")
+    logger.error(f"Request method: {request.method}")
+    logger.error(f"Request headers: {dict(request.headers)}")
     logger.error(f"Traceback: {traceback.format_exc()}")
     return {"error": "Internal server error", "detail": str(exc)}
 
@@ -202,7 +217,15 @@ def read_root():
 
 @app.get("/showtimes")
 def get_all_showtimes_endpoint():
-    return get_all_showtimes()
+    logger.info("GET /showtimes - Request received")
+    try:
+        showtimes = get_all_showtimes()
+        logger.info(f"GET /showtimes - Returning {len(showtimes)} showtimes")
+        return showtimes
+    except Exception as e:
+        logger.error(f"GET /showtimes - Error: {str(e)}")
+        logger.error(f"GET /showtimes - Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/showtime/{showtime_id}")
 def get_showtime_info(showtime_id: int):
