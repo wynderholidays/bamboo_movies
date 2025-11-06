@@ -72,80 +72,79 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     return `${String.fromCharCode(65 + row)}${col}`;
   };
 
-  const toggleSeat = async (seatId: string) => {
+  const toggleSeat = (seatId: string) => {
+    console.log(`Toggling seat ${seatId}`);
+    
     // Check if seat is unavailable
     const isUnavailable = theaterInfo?.pending_approval_seats?.includes(seatId) ||
                          theaterInfo?.approved_seats?.includes(seatId) ||
                          theaterInfo?.confirmed_seats?.includes(seatId) ||
-                         theaterInfo?.non_selectable?.includes(seatId) ||
-                         theaterInfo?.reserved_seats?.includes(seatId);
+                         theaterInfo?.non_selectable?.includes(seatId);
     
-    if (isUnavailable) return;
+    if (isUnavailable) {
+      console.log(`Seat ${seatId} is unavailable`);
+      return;
+    }
     
     const isCurrentlySelected = selectedSeats.includes(seatId);
     
     if (isCurrentlySelected) {
-      // Deselecting seat - remove reservation
+      console.log(`Deselecting seat ${seatId}`);
       setSelectedSeats(prev => prev.filter(s => s !== seatId));
     } else {
-      // Selecting seat - reserve it
-      try {
-        const response = await fetch('/api/reserve-seats', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            showtime_id: selectedShowtimeId,
-            seats: [seatId],
-            user_id: userId
-          })
-        });
-        
-        if (response.ok) {
-          setSelectedSeats(prev => [...prev, seatId]);
-          fetchTheaterInfo(); // Refresh to show updated reservations
-        } else {
-          const error = await response.json();
-          alert(error.detail || 'Seat no longer available');
-          fetchTheaterInfo();
-        }
-      } catch (error) {
-        console.error('Seat reservation error:', error);
-        alert('Failed to reserve seat');
-      }
+      console.log(`Selecting seat ${seatId}`);
+      setSelectedSeats(prev => [...prev, seatId]);
     }
   };
 
   const createBooking = async () => {
-    if (isBooking) return; // Prevent double booking
+    if (isBooking) {
+      console.log('Booking already in progress, ignoring click');
+      return;
+    }
+    
+    console.log('Starting booking process...');
+    console.log('Selected seats:', selectedSeats);
+    console.log('Customer info:', customerInfo);
     
     setIsBooking(true);
     try {
+      const bookingData = {
+        showtime_id: selectedShowtimeId,
+        customer_name: customerInfo.name,
+        customer_email: customerInfo.email,
+        customer_phone: customerInfo.phone,
+        selected_seats: selectedSeats
+      };
+      
+      console.log('Sending booking request:', bookingData);
+      
       const response = await fetch('/api/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          showtime_id: selectedShowtimeId,
-          customer_name: customerInfo.name,
-          customer_email: customerInfo.email,
-          customer_phone: customerInfo.phone,
-          selected_seats: selectedSeats
-        })
+        body: JSON.stringify(bookingData)
       });
 
+      console.log('Booking response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Booking successful:', data);
         setBookingResponse(data);
+        console.log('Navigating to payment page...');
         navigate(`/payment/${selectedShowtimeId}`);
       } else {
         const error = await response.json();
+        console.error('Booking failed:', error);
         alert(error.detail || 'Booking failed');
-        fetchTheaterInfo(); // Refresh seat availability
+        fetchTheaterInfo();
       }
     } catch (error) {
       console.error('Booking error:', error);
       alert('Booking failed - please try again');
     } finally {
       setIsBooking(false);
+      console.log('Booking process completed');
     }
   };
 
@@ -294,13 +293,11 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                     const isPendingApproval = theaterInfo.pending_approval_seats?.includes(seatId);
                     const isApproved = theaterInfo.approved_seats?.includes(seatId);
                     const isConfirmed = theaterInfo.confirmed_seats?.includes(seatId);
-                    const isReserved = theaterInfo.reserved_seats?.includes(seatId);
                     
                     let seatClass = '';
                     if (isNonSelectable) seatClass = 'non-selectable';
                     else if (isPendingApproval) seatClass = 'pending-approval';
                     else if (isApproved || isConfirmed) seatClass = 'confirmed';
-                    else if (isReserved) seatClass = 'reserved';
                     else if (isSelected) seatClass = 'selected';
                     
                     return (
@@ -323,13 +320,11 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                     const isPendingApproval = theaterInfo.pending_approval_seats?.includes(seatId);
                     const isApproved = theaterInfo.approved_seats?.includes(seatId);
                     const isConfirmed = theaterInfo.confirmed_seats?.includes(seatId);
-                    const isReserved = theaterInfo.reserved_seats?.includes(seatId);
                     
                     let seatClass = '';
                     if (isNonSelectable) seatClass = 'non-selectable';
                     else if (isPendingApproval) seatClass = 'pending-approval';
                     else if (isApproved || isConfirmed) seatClass = 'confirmed';
-                    else if (isReserved) seatClass = 'reserved';
                     else if (isSelected) seatClass = 'selected';
                     
                     return (
@@ -351,7 +346,6 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
           <div className="legend">
             <span className="available">Available</span>
             <span className="selected">Selected</span>
-            <span className="reserved">Reserved (5 min)</span>
             <span className="pending-approval">Pending Approval</span>
             <span className="confirmed">Confirmed</span>
             <span className="non-selectable">Not Available</span>
