@@ -475,17 +475,21 @@ def verify_payment_otp(request: OTPVerification):
     if request.email:
         email = request.email
     elif request.phone:
-        # Look up email by phone
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT customer_email FROM bookings WHERE customer_phone = %s ORDER BY created_at DESC LIMIT 1", (request.phone,))
-        result = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        
-        if not result:
-            raise HTTPException(status_code=400, detail="No booking found for this phone number")
-        email = result['customer_email']
+        # Check if phone field actually contains an email
+        if '@' in request.phone:
+            email = request.phone
+        else:
+            # Look up email by phone
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT customer_email FROM bookings WHERE customer_phone = %s ORDER BY created_at DESC LIMIT 1", (request.phone,))
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if not result:
+                raise HTTPException(status_code=400, detail="No booking found for this phone number")
+            email = result['customer_email']
     else:
         raise HTTPException(status_code=400, detail="Either email or phone is required")
     
