@@ -42,8 +42,8 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
   const fetchBookings = async () => {
     try {
       const [bookingsResponse, analyticsResponse] = await Promise.all([
-        fetch('http://localhost:8000/bookings'),
-        fetch('http://localhost:8000/analytics')
+        fetch('/api/bookings'),
+        fetch('/api/analytics')
       ]);
       
       const bookingsData = await bookingsResponse.json();
@@ -54,7 +54,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
         bookingsData.map(async (booking: any) => {
           if (booking.showtime_id) {
             try {
-              const showtimeResponse = await fetch(`http://localhost:8000/showtime/${booking.showtime_id}`);
+              const showtimeResponse = await fetch(`/api/showtime/${booking.showtime_id}`);
               const showtimeData = await showtimeResponse.json();
               return {
                 ...booking,
@@ -82,7 +82,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
 
   const updateBookingStatus = async (bookingId: number, status: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/booking/${bookingId}/status?status=${status}`, {
+      const response = await fetch(`/api/booking/${bookingId}/status?status=${status}`, {
         method: 'PUT'
       });
       
@@ -100,7 +100,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
 
   const viewPaymentProof = async (bookingId: number) => {
     try {
-      const response = await fetch(`http://localhost:8000/payment-proof/${bookingId}`);
+      const response = await fetch(`/api/payment-proof/${bookingId}`);
       
       if (response.ok) {
         const blob = await response.blob();

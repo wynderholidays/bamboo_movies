@@ -53,9 +53,9 @@ const AdminManagement: React.FC = () => {
   const fetchData = async () => {
     try {
       const [moviesRes, theatersRes, showtimesRes] = await Promise.all([
-        fetch('http://localhost:8000/admin/movies'),
-        fetch('http://localhost:8000/admin/theaters'),
-        fetch('http://localhost:8000/admin/showtimes')
+        fetch('/api/admin/movies'),
+        fetch('/api/admin/theaters'),
+        fetch('/api/admin/showtimes')
       ]);
       
       setMovies(await moviesRes.json());
@@ -68,7 +68,7 @@ const AdminManagement: React.FC = () => {
 
   const createMovie = async () => {
     try {
-      const response = await fetch('http://localhost:8000/admin/movies', {
+      const response = await fetch('/api/admin/movies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newMovie)
@@ -92,7 +92,7 @@ const AdminManagement: React.FC = () => {
     if (!editingMovie) return;
     
     try {
-      const response = await fetch(`http://localhost:8000/admin/movies/${editingMovie.id}`, {
+      const response = await fetch(`/api/admin/movies/${editingMovie.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -119,7 +119,7 @@ const AdminManagement: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this movie?')) return;
     
     try {
-      const response = await fetch(`http://localhost:8000/admin/movies/${id}`, {
+      const response = await fetch(`/api/admin/movies/${id}`, {
         method: 'DELETE'
       });
       
@@ -136,7 +136,7 @@ const AdminManagement: React.FC = () => {
     if (!editingTheater) return;
     
     try {
-      const response = await fetch(`http://localhost:8000/admin/theaters/${editingTheater.id}`, {
+      const response = await fetch(`/api/admin/theaters/${editingTheater.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -163,7 +163,7 @@ const AdminManagement: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this theater?')) return;
     
     try {
-      const response = await fetch(`http://localhost:8000/admin/theaters/${id}`, {
+      const response = await fetch(`/api/admin/theaters/${id}`, {
         method: 'DELETE'
       });
       
@@ -180,7 +180,7 @@ const AdminManagement: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this showtime?')) return;
     
     try {
-      const response = await fetch(`http://localhost:8000/admin/showtimes/${id}`, {
+      const response = await fetch(`/api/admin/showtimes/${id}`, {
         method: 'DELETE'
       });
       
@@ -200,7 +200,7 @@ const AdminManagement: React.FC = () => {
         non_selectable_seats: newTheater.non_selectable_seats.split(',').map(s => s.trim()).filter(s => s)
       };
       
-      const response = await fetch('http://localhost:8000/admin/theaters', {
+      const response = await fetch('/api/admin/theaters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(theaterData)
@@ -218,7 +218,7 @@ const AdminManagement: React.FC = () => {
 
   const createShowtime = async () => {
     try {
-      const response = await fetch('http://localhost:8000/admin/showtimes', {
+      const response = await fetch('/api/admin/showtimes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newShowtime)

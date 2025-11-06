@@ -58,7 +58,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     if (!selectedShowtimeId) return;
     
     try {
-      const response = await fetch(`http://localhost:8000/showtime/${selectedShowtimeId}`);
+      const response = await fetch(`/api/showtime/${selectedShowtimeId}`);
       const data = await response.json();
       setTheaterInfo(data);
     } catch (error) {
@@ -89,7 +89,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
 
   const createBooking = async () => {
     try {
-      const response = await fetch('http://localhost:8000/book', {
+      const response = await fetch('/api/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,7 +144,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     formData.append('file', paymentFile);
 
     try {
-      const response = await fetch(`http://localhost:8000/upload-payment/${bookingResponse.booking_id}`, {
+      const response = await fetch(`/api/upload-payment/${bookingResponse.booking_id}`, {
         method: 'POST',
         body: formData
       });
@@ -168,7 +168,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
 
   const verifyPaymentOTP = async () => {
     try {
-      const response = await fetch('http://localhost:8000/verify-payment-otp', {
+      const response = await fetch('/api/verify-payment-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: customerInfo.email, otp: paymentOtp })

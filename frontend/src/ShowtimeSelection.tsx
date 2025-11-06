@@ -25,7 +25,7 @@ const ShowtimeSelection: React.FC<Props> = ({ onShowtimeSelect }) => {
 
   const fetchShowtimes = async () => {
     try {
-      const response = await fetch('http://localhost:8000/showtimes');
+      const response = await fetch('/api/showtimes');
       const data = await response.json();
       setShowtimes(data);
     } catch (error) {
