@@ -60,6 +60,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     if (currentRoute.includes('/payment') || currentRoute.includes('/success')) {
       const storedBooking = sessionStorage.getItem('bookingResponse');
       const storedCustomer = sessionStorage.getItem('customerInfo');
+      const storedSeats = sessionStorage.getItem('selectedSeats');
       
       if (storedBooking && !bookingResponse) {
         console.log('Restoring booking data from sessionStorage');
@@ -69,6 +70,11 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
       if (storedCustomer && (!customerInfo.email || !customerInfo.name)) {
         console.log('Restoring customer data from sessionStorage');
         setCustomerInfo(JSON.parse(storedCustomer));
+      }
+      
+      if (storedSeats && selectedSeats.length === 0) {
+        console.log('Restoring selected seats from sessionStorage');
+        setSelectedSeats(JSON.parse(storedSeats));
       }
     }
   }, [selectedShowtimeId, currentRoute]);
