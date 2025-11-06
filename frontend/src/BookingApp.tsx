@@ -371,11 +371,11 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         <div className="seat-selection">
           <h2>Select Seats</h2>
           <div className="theater-layout">
-            {Array.from({ length: theaterInfo.rows }, (_, row) => (
+            {Array.from({ length: theaterInfo?.rows || 0 }, (_, row) => (
               <div key={row} className="theater-row">
                 <span className="row-label">{String.fromCharCode(65 + row)}</span>
                 <div className="left-section">
-                  {Array.from({ length: theaterInfo.left_cols }, (_, col) => {
+                  {Array.from({ length: theaterInfo?.left_cols || 0 }, (_, col) => {
                     const seatId = generateSeatId(row, col + 1);
                     const isSelected = selectedSeats.includes(seatId);
                     const isNonSelectable = theaterInfo.non_selectable?.includes(seatId);
@@ -403,8 +403,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                 </div>
                 <div className="aisle"></div>
                 <div className="right-section">
-                  {Array.from({ length: theaterInfo.right_cols }, (_, col) => {
-                    const seatId = generateSeatId(row, col + theaterInfo.left_cols + 1);
+                  {Array.from({ length: theaterInfo?.right_cols || 0 }, (_, col) => {
+                    const seatId = generateSeatId(row, col + (theaterInfo?.left_cols || 0) + 1);
                     const isSelected = selectedSeats.includes(seatId);
                     const isNonSelectable = theaterInfo.non_selectable?.includes(seatId);
                     const isPendingPayment = theaterInfo.pending_payment_seats?.includes(seatId);
@@ -466,7 +466,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
               
               <div className="summary">
                 <p>Selected Seats: {selectedSeats.join(', ')}</p>
-                <p>Total Amount: Rp {(selectedSeats.length * theaterInfo.price).toLocaleString()}</p>
+                <p>Total Amount: Rp {(selectedSeats.length * (theaterInfo?.price || 0)).toLocaleString()}</p>
               </div>
               
               <button 
