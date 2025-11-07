@@ -64,16 +64,23 @@ def get_booking_by_id(booking_id):
     
     return dict(booking) if booking else None
 
-def update_booking_status(booking_id, status):
-    """Update booking status"""
+def update_booking_status(booking_id, status, admin_remarks=None):
+    """Update booking status with optional admin remarks"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("""
-        UPDATE bookings SET status = %s, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = %s
-        RETURNING *
-    """, (status, booking_id))
+    if admin_remarks:
+        cursor.execute("""
+            UPDATE bookings SET status = %s, admin_remarks = %s, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = %s
+            RETURNING *
+        """, (status, admin_remarks, booking_id))
+    else:
+        cursor.execute("""
+            UPDATE bookings SET status = %s, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = %s
+            RETURNING *
+        """, (status, booking_id))
     
     booking = cursor.fetchone()
     conn.commit()
@@ -283,26 +290,34 @@ def check_seat_availability(showtime_id, seats, user_id):
 
 # Analytics
 def get_analytics():
-    """Get booking analytics"""
+    """Get booking analytics based on seats"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute("""
         SELECT 
-            COUNT(*) as total_bookings,
+            SUM(array_length(seats, 1)) as total_seats_booked,
             SUM(CASE WHEN status IN ('confirmed', 'approved') THEN total_amount ELSE 0 END) as total_revenue,
-            COUNT(CASE WHEN status = 'confirmed' THEN 1 END) as confirmed_bookings,
-            COUNT(CASE WHEN status = 'pending_payment' THEN 1 END) as pending_bookings,
-            COUNT(CASE WHEN status = 'pending_approval' THEN 1 END) as pending_approval,
-            COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_bookings
+            SUM(CASE WHEN status IN ('confirmed', 'approved') THEN array_length(seats, 1) ELSE 0 END) as confirmed_seats,
+            SUM(CASE WHEN status = 'pending_payment' THEN array_length(seats, 1) ELSE 0 END) as pending_payment_seats,
+            SUM(CASE WHEN status = 'pending_verification' THEN array_length(seats, 1) ELSE 0 END) as pending_verification_seats,
+            SUM(CASE WHEN status = 'pending_approval' THEN array_length(seats, 1) ELSE 0 END) as pending_approval_seats
         FROM bookings
+        WHERE status NOT IN ('cancelled', 'admin_rejected')
     """)
     
     result = cursor.fetchone()
     cursor.close()
     conn.close()
     
-    return dict(result)
+    return {
+        'total_bookings': result['confirmed_seats'] or 0,  # Only approved/confirmed seats
+        'total_revenue': result['total_revenue'] or 0,
+        'confirmed_bookings': result['confirmed_seats'] or 0,
+        'pending_bookings': result['pending_payment_seats'] or 0,
+        'pending_verification': result['pending_verification_seats'] or 0,
+        'pending_approval': result['pending_approval_seats'] or 0
+    }
 
 # Theater configuration
 # Movies management

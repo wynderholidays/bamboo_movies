@@ -38,6 +38,9 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [bookingStats, setBookingStats] = useState<Record<string, number>>({});
   const [toast, setToast] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
+  const [actionModal, setActionModal] = useState<{bookingId: number, currentStatus: string} | null>(null);
+  const [actionStatus, setActionStatus] = useState<string>('');
+  const [adminRemarks, setAdminRemarks] = useState<string>('');
 
   const showToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
     setToast({message, type});
@@ -113,21 +116,58 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
     }
   };
 
-  const updateBookingStatus = async (bookingId: number, status: string) => {
+  const updateBookingStatus = async (bookingId: number, status: string, remarks?: string) => {
     try {
-      const response = await authUtils.apiCall(`/api/booking/${bookingId}/status?status=${status}`, {
-        method: 'PUT'
+      const response = await authUtils.apiCall(`/api/booking/${bookingId}/action`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, admin_remarks: remarks })
       });
       
       if (response.ok) {
         fetchBookings();
         showToast(`Booking ${bookingId} ${status} successfully`, 'success');
+        setActionModal(null);
+        setAdminRemarks('');
       } else {
         showToast('Failed to update booking status', 'error');
       }
     } catch (error) {
       console.error('Error updating booking:', error);
       showToast('Failed to update booking status', 'error');
+    }
+  };
+
+  const openActionModal = (bookingId: number, currentStatus: string) => {
+    setActionModal({bookingId, currentStatus});
+    setActionStatus('');
+    setAdminRemarks('');
+  };
+
+  const handleActionSubmit = () => {
+    if (!actionStatus) {
+      showToast('Please select an action', 'error');
+      return;
+    }
+    updateBookingStatus(actionModal!.bookingId, actionStatus, adminRemarks);
+  };
+
+  const resendConfirmationEmail = async (bookingId: number) => {
+    try {
+      const response = await authUtils.apiCall(`/api/booking/${bookingId}/resend-email`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        showToast(result.message, 'success');
+      } else {
+        const error = await response.json();
+        showToast(error.detail || 'Failed to resend email', 'error');
+      }
+    } catch (error) {
+      console.error('Error resending email:', error);
+      showToast('Failed to resend email', 'error');
     }
   };
 
@@ -246,24 +286,16 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
           marginBottom: '30px' 
         }}>
           <div style={{ background: '#e3f2fd', padding: '20px', borderRadius: '10px', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#1976d2' }}>Total Bookings</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>{analytics.total_bookings}</p>
+            <h3 style={{ margin: '0 0 10px 0', color: '#1976d2' }}>Approved Seats</h3>
+            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>{analytics.total_bookings || 0}</p>
           </div>
           <div style={{ background: '#e8f5e8', padding: '20px', borderRadius: '10px', textAlign: 'center' }}>
             <h3 style={{ margin: '0 0 10px 0', color: '#2e7d32' }}>Total Revenue</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Rp {analytics.total_revenue.toLocaleString()}</p>
-          </div>
-          <div style={{ background: '#fff3e0', padding: '20px', borderRadius: '10px', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#f57c00' }}>Confirmed</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>{analytics.confirmed_bookings}</p>
-          </div>
-          <div style={{ background: '#fce4ec', padding: '20px', borderRadius: '10px', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#c2185b' }}>Pending</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>{analytics.pending_bookings}</p>
+            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Rp {(analytics.total_revenue || 0).toLocaleString()}</p>
           </div>
           <div style={{ background: '#f3e5f5', padding: '20px', borderRadius: '10px', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#7b1fa2' }}>Occupancy</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>{analytics.occupancy_rate.toFixed(1)}%</p>
+            <h3 style={{ margin: '0 0 10px 0', color: '#7b1fa2' }}>Occupancy Rate</h3>
+            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>{(analytics.occupancy_rate || 0).toFixed(1)}%</p>
           </div>
         </div>
       )}
@@ -307,6 +339,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
               <th style={{ padding: '12px', border: '1px solid #ddd' }}>Date</th>
               <th style={{ padding: '12px', border: '1px solid #ddd' }}>Payment Proof</th>
               <th style={{ padding: '12px', border: '1px solid #ddd' }}>Actions</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Resend Email</th>
             </tr>
           </thead>
           <tbody>
@@ -358,43 +391,52 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
                   )}
                 </td>
                 <td style={{ padding: '12px', border: '1px solid #ddd' }}>
-                  {booking.status === 'pending_approval' && (
-                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                      <button 
-                        onClick={() => updateBookingStatus(booking.id, 'approved')}
-                        style={{ padding: '4px 8px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', fontSize: '12px' }}
-                      >
-                        ✓ Approve
-                      </button>
-                      <button 
-                        onClick={() => updateBookingStatus(booking.id, 'admin_rejected')}
-                        style={{ padding: '4px 8px', background: '#f44336', color: 'white', border: 'none', borderRadius: '3px', fontSize: '12px' }}
-                      >
-                        ✗ Reject
-                      </button>
+                  <button 
+                    onClick={() => openActionModal(booking.id, booking.status)}
+                    style={{ 
+                      padding: '6px 12px', 
+                      background: '#2196F3', 
+                      color: 'white', 
+                      border: 'none', 
+                      borderRadius: '4px', 
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ⚡ Actions
+                  </button>
+                  {(booking as any).admin_remarks && (
+                    <div style={{ 
+                      marginTop: '5px', 
+                      fontSize: '11px', 
+                      color: '#666', 
+                      fontStyle: 'italic',
+                      maxWidth: '150px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      💬 {(booking as any).admin_remarks}
                     </div>
                   )}
-                  {booking.status === 'approved' && (
-                    <span style={{ color: '#4CAF50', fontWeight: 'bold', fontSize: '12px' }}>✓ Approved</span>
-                  )}
-                  {booking.status === 'pending_payment' && (
-                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                      <button 
-                        onClick={() => updateBookingStatus(booking.id, 'cancelled')}
-                        style={{ padding: '4px 8px', background: '#f44336', color: 'white', border: 'none', borderRadius: '3px', fontSize: '12px' }}
-                      >
-                        ✗ Cancel
-                      </button>
-                    </div>
-                  )}
-                  {booking.status === 'confirmed' && (
-                    <span style={{ color: '#4CAF50', fontWeight: 'bold', fontSize: '12px' }}>✓ Confirmed</span>
-                  )}
-                  {booking.status === 'cancelled' && (
-                    <span style={{ color: '#f44336', fontWeight: 'bold', fontSize: '12px' }}>✗ Cancelled</span>
-                  )}
-                  {booking.status === 'admin_rejected' && (
-                    <span style={{ color: '#9E9E9E', fontWeight: 'bold', fontSize: '12px' }}>✗ Rejected</span>
+                </td>
+                <td style={{ padding: '12px', border: '1px solid #ddd' }}>
+                  {booking.status === 'approved' ? (
+                    <button 
+                      onClick={() => resendConfirmationEmail(booking.id)}
+                      style={{ 
+                        padding: '6px 12px', 
+                        background: '#4CAF50', 
+                        color: 'white', 
+                        border: 'none', 
+                        borderRadius: '4px', 
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📧 Resend
+                    </button>
+                  ) : (
+                    <span style={{ color: '#999', fontSize: '12px' }}>N/A</span>
                   )}
                 </td>
               </tr>
@@ -445,6 +487,97 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
               alt="Payment Proof" 
               style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '10px' }}
             />
+          </div>
+        </div>
+      )}
+
+      {actionModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '30px',
+            borderRadius: '10px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <h3 style={{ marginTop: 0 }}>Update Booking #{actionModal.bookingId}</h3>
+            <p><strong>Current Status:</strong> {actionModal.currentStatus}</p>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>New Status:</label>
+              <select 
+                value={actionStatus} 
+                onChange={(e) => setActionStatus(e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+              >
+                <option value="">Select Action...</option>
+                <option value="pending_payment">Set to Pending Payment</option>
+                <option value="pending_verification">Set to Pending Verification</option>
+                <option value="pending_approval">Set to Pending Approval</option>
+                <option value="approved">Approve Booking</option>
+                <option value="confirmed">Confirm Booking</option>
+                <option value="admin_rejected">Reject Booking</option>
+                <option value="cancelled">Cancel Booking</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>Admin Remarks (Optional):</label>
+              <textarea 
+                value={adminRemarks}
+                onChange={(e) => setAdminRemarks(e.target.value)}
+                placeholder="Add any notes or reasons for this action..."
+                style={{ 
+                  width: '100%', 
+                  height: '80px', 
+                  padding: '8px', 
+                  borderRadius: '4px', 
+                  border: '1px solid #ddd',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setActionModal(null)}
+                style={{ 
+                  padding: '10px 20px', 
+                  background: '#f0f0f0', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleActionSubmit}
+                style={{ 
+                  padding: '10px 20px', 
+                  background: '#2196F3', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Update Booking
+              </button>
+            </div>
           </div>
         </div>
       )}

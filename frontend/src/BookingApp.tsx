@@ -301,7 +301,8 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
       
       if (response.ok) {
         setShowPaymentOTP(false);
-        navigate('/success');
+        const storedShowtimeId = sessionStorage.getItem('selectedShowtimeId');
+        navigate(`/success/${storedShowtimeId || selectedShowtimeId}`);
       } else {
         const error = await response.json();
         showToast(error.detail, 'error');
@@ -505,7 +506,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                   cursor: isBooking ? 'not-allowed' : 'pointer'
                 }}
               >
-                {isBooking ? 'Processing...' : 'Confirm Booking J'}
+                {isBooking ? 'Processing...' : 'Confirm Booking'}
               </button>
             </div>
           )}

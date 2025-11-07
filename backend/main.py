@@ -117,21 +117,55 @@ except Exception as e:
     s3_client = None
     logger.warning(f"AWS not configured: {e}")
 
-def send_email(to_email, subject, body):
-    logger.info(f"Attempting to send email to: {to_email}")
+def send_email(to_email, subject, body, cc_email=None):
+    if cc_email:
+        logger.info(f"Attempting to send email to: {to_email} (CC: {cc_email})")
+    else:
+        logger.info(f"Attempting to send email to: {to_email}")
     if not ses_client:
         logger.warning(f"Demo mode - Email would be sent to {to_email}")
         return False
     
     try:
-        response = ses_client.send_email(
-            Source=SES_FROM_EMAIL,
-            Destination={'ToAddresses': [to_email]},
-            Message={
+        # Improved email with proper headers and text version
+        text_body = f"""
+        {subject}
+        
+        Dear Customer,
+        
+        This is an automated message from Bamboo Holiday Movies.
+        
+        Please check the HTML version of this email for full details.
+        
+        Best regards,
+        Bamboo Holiday Movies Team
+        
+        ---
+        This is an automated message. Please do not reply to this email.
+        """
+        
+        destination = {'ToAddresses': [to_email]}
+        if cc_email:
+            destination['CcAddresses'] = [cc_email]
+        
+        email_params = {
+            'Source': SES_FROM_EMAIL,
+            'Destination': destination,
+            'Message': {
                 'Subject': {'Data': subject, 'Charset': 'UTF-8'},
-                'Body': {'Html': {'Data': body, 'Charset': 'UTF-8'}}
+                'Body': {
+                    'Html': {'Data': body, 'Charset': 'UTF-8'},
+                    'Text': {'Data': text_body, 'Charset': 'UTF-8'}
+                }
             }
-        )
+        }
+        
+        # Only add configuration set if it exists
+        config_set = os.getenv('SES_CONFIGURATION_SET')
+        if config_set:
+            email_params['ConfigurationSetName'] = config_set
+        
+        response = ses_client.send_email(**email_params)
         logger.info(f"Email sent successfully to {to_email}. MessageId: {response['MessageId']}")
         return True
     except ClientError as e:
@@ -148,10 +182,10 @@ JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-super-secret-jwt-key-change-i
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 
-# Admin credentials - MUST be set in environment variables for production
+# Admin credentials - Simple for local development
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')  # bcrypt hash
-ADMIN_PLAIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'BambooMovies2024!@#')  # fallback for dev
+ADMIN_PLAIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')  # Simple for local dev
 
 # Security
 security = HTTPBearer()
@@ -234,11 +268,17 @@ class AdminSettingsUpdate(BaseModel):
     admin_email: str
     notification_enabled: bool
 
+class BookingAction(BaseModel):
+    status: str
+    admin_remarks: Optional[str] = None
+
 @app.get("/")
+@app.get("/api/")
 def read_root():
     return {"message": "Movie Booking API"}
 
 @app.get("/showtimes")
+@app.get("/api/showtimes")
 def get_all_showtimes_endpoint():
     logger.info("GET /showtimes - Request received")
     try:
@@ -251,6 +291,7 @@ def get_all_showtimes_endpoint():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/showtime/{showtime_id}")
+@app.get("/api/showtime/{showtime_id}")
 def get_showtime_info(showtime_id: int):
     showtime_layout = get_showtime_layout(showtime_id)
     if not showtime_layout:
@@ -298,6 +339,7 @@ def get_showtime_info(showtime_id: int):
     }
 
 @app.post("/reserve-seats")
+@app.post("/api/reserve-seats")
 def reserve_seats_endpoint(reservation: SeatReservation, request: Request):
     # Anti-abuse: Check IP-based limits
     client_ip = request.headers.get('x-real-ip') or request.client.host
@@ -339,6 +381,7 @@ def reserve_seats_endpoint(reservation: SeatReservation, request: Request):
     return {"message": "Seats reserved successfully", "expires_at": expires_at.isoformat()}
 
 @app.post("/book")
+@app.post("/api/book")
 def create_booking_endpoint(booking: BookingRequest):
     logger.info(f"Creating booking for showtime {booking.showtime_id}, customer: {booking.customer_name}, seats: {booking.selected_seats}")
     
@@ -394,6 +437,7 @@ def create_booking_endpoint(booking: BookingRequest):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.post("/upload-payment/{booking_id}")
+@app.post("/api/upload-payment/{booking_id}")
 async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
     logger.info(f"Upload payment proof request for booking {booking_id}, file: {file.filename}")
     
@@ -455,30 +499,49 @@ async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
         showtime_layout = get_showtime_layout(booking['showtime_id'])
         
         # Send OTP email with detailed booking information
-        subject = f"Payment Verification - Booking #{booking_id}"
+        subject = f"Payment Verification Required - Booking {booking_id}"
         body = f"""
-        <h2>🎬 Payment Verification Required</h2>
-        <p>Dear {booking['customer_name']},</p>
-        <p>Your payment proof has been uploaded successfully for the following booking:</p>
-        
-        <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px 0;">
-            <h3>📋 Booking Details:</h3>
-            <p><strong>Booking ID:</strong> #{booking_id}</p>
-            <p><strong>Movie:</strong> {showtime_layout['movie'] if showtime_layout else 'N/A'}</p>
-            <p><strong>Theater:</strong> {showtime_layout['theater'] if showtime_layout else 'N/A'}</p>
-            <p><strong>Address:</strong> {showtime_layout.get('address', 'N/A') if showtime_layout else 'N/A'}</p>
-            <p><strong>Show Date:</strong> {showtime_layout['show_date'] if showtime_layout else 'N/A'}</p>
-            <p><strong>Show Time:</strong> {showtime_layout['showtime'] if showtime_layout else 'N/A'}</p>
-            <p><strong>Selected Seats:</strong> {', '.join(booking['seats'])}</p>
-            <p><strong>Total Amount:</strong> Rp {booking['total_amount']:,}</p>
-        </div>
-        
-        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>🔐 Verification OTP:</strong> <span style="font-size: 24px; font-weight: bold; color: #007bff;">{otp}</span></p>
-            <p><em>This OTP is valid for 5 minutes only.</em></p>
-        </div>
-        
-        <p>Please enter this OTP to verify your payment and proceed with booking confirmation.</p>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Payment Verification</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h2 style="color: #007bff; margin-top: 0;">Payment Verification Required</h2>
+                <p>Dear {booking['customer_name']},</p>
+                <p>Thank you for your payment. We have received your payment proof and need to verify it.</p>
+            </div>
+            
+            <div style="background: #ffffff; border: 1px solid #dee2e6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #495057; margin-top: 0;">Booking Information</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Booking ID:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{booking_id}</td></tr>
+                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Movie:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{showtime_layout['movie'] if showtime_layout else 'N/A'}</td></tr>
+                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Theater:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{showtime_layout['theater'] if showtime_layout else 'N/A'}</td></tr>
+                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Date:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{showtime_layout['show_date'] if showtime_layout else 'N/A'}</td></tr>
+                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Time:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{showtime_layout['showtime'] if showtime_layout else 'N/A'}</td></tr>
+                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Seats:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{', '.join(booking['seats'])}</td></tr>
+                    <tr><td style="padding: 8px 0;"><strong>Amount:</strong></td><td style="padding: 8px 0;">Rp {booking['total_amount']:,}</td></tr>
+                </table>
+            </div>
+            
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                <h3 style="color: #856404; margin-top: 0;">Verification Code</h3>
+                <div style="font-size: 32px; font-weight: bold; color: #007bff; letter-spacing: 4px; margin: 15px 0;">{otp}</div>
+                <p style="color: #856404; margin-bottom: 0;">This code expires in 5 minutes</p>
+            </div>
+            
+            <p>Please enter this verification code to complete your booking process.</p>
+            
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 30px; font-size: 12px; color: #6c757d;">
+                <p style="margin: 0;">This is an automated message from Bamboo Holiday Movies. Please do not reply to this email.</p>
+                <p style="margin: 5px 0 0 0;">If you did not make this booking, please ignore this email.</p>
+            </div>
+        </body>
+        </html>
         """
         
         if send_email(booking['customer_email'], subject, body):
@@ -495,6 +558,7 @@ async def upload_payment_proof(booking_id: int, file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/booking/{booking_id}")
+@app.get("/api/booking/{booking_id}")
 def get_booking(booking_id: int):
     booking = get_booking_by_id(booking_id)
     if not booking:
@@ -536,6 +600,7 @@ def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(securi
         raise HTTPException(status_code=401, detail="Authentication required")
 
 @app.post("/admin/login")
+@app.post("/api/admin/login")
 def admin_login(credentials: AdminLogin):
     logger.info(f"Admin login attempt for username: {credentials.username}")
     
@@ -562,28 +627,20 @@ def admin_login(credentials: AdminLogin):
     return {"access_token": token, "token_type": "bearer", "expires_in": JWT_EXPIRATION_HOURS * 3600}
 
 @app.post("/admin/logout")
+@app.post("/api/admin/logout")
 def admin_logout(admin: dict = Depends(get_current_admin)):
     """Logout admin user"""
     logger.info(f"Admin logout: {admin['username']}")
     return {"message": "Logged out successfully"}
 
 @app.get("/admin/me")
+@app.get("/api/admin/me")
 def get_admin_info(admin: dict = Depends(get_current_admin)):
     """Get current admin user info"""
     return {"username": admin['username'], "exp": admin['exp']}
 
-def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verify admin JWT token"""
-    try:
-        payload = verify_jwt_token(credentials.credentials)
-        if payload['username'] != ADMIN_USERNAME:
-            raise HTTPException(status_code=401, detail="Invalid user")
-        return payload
-    except Exception as e:
-        logger.error(f"Authentication failed: {str(e)}")
-        raise HTTPException(status_code=401, detail="Authentication required")
-
 @app.get("/bookings")
+@app.get("/api/bookings")
 def get_all_bookings_endpoint(status: str = None, admin: dict = Depends(get_current_admin)):
     if status:
         conn = get_db_connection()
@@ -633,6 +690,7 @@ def get_payment_proof(booking_id: int):
         return FileResponse(file_url)
 
 @app.post("/verify-payment-otp")
+@app.post("/api/verify-payment-otp")
 def verify_payment_otp(request: OTPVerification):
     logger.info(f"=== OTP VERIFICATION START ===")
     logger.info(f"Raw request data - Email: '{request.email}', Phone: '{request.phone}', OTP: '{request.otp}'")
@@ -730,24 +788,38 @@ def verify_payment_otp(request: OTPVerification):
     
     return {"message": "Payment verified. Admin has been notified for approval."}
 
-@app.put("/booking/{booking_id}/status")
-def update_booking_status_endpoint(booking_id: int, status: str, admin: dict = Depends(get_current_admin)):
+@app.put("/booking/{booking_id}/action")
+@app.put("/api/booking/{booking_id}/action")
+def update_booking_action_endpoint(booking_id: int, action: BookingAction, admin: dict = Depends(get_current_admin)):
     booking = get_booking_by_id(booking_id)
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     
-    valid_statuses = ["pending_approval", "approved", "confirmed", "cancelled", "admin_rejected"]
-    if status not in valid_statuses:
+    valid_statuses = ["pending_payment", "pending_verification", "pending_approval", "approved", "confirmed", "cancelled", "admin_rejected"]
+    if action.status not in valid_statuses:
         raise HTTPException(status_code=400, detail="Invalid status")
     
     old_status = booking["status"]
-    updated_booking = update_booking_status(booking_id, status)
+    updated_booking = update_booking_status(booking_id, action.status, action.admin_remarks)
+    status = action.status
     
-    # Send email notification on status change
+    return {"message": f"Booking status updated from {old_status} to {status}"}
+
+@app.put("/booking/{booking_id}/status")
+@app.put("/api/booking/{booking_id}/status")
+def update_booking_status_endpoint(booking_id: int, status: str, admin: dict = Depends(get_current_admin)):
+    """Legacy endpoint for backward compatibility"""
+    action = BookingAction(status=status)
+    return update_booking_action_endpoint(booking_id, action, admin)
+
+# Send email notification on status change helper
+def send_status_change_email(booking_id, status, old_status):
+    booking = get_booking_by_id(booking_id)
+    if not booking:
+        return
     if status in ["approved", "confirmed", "cancelled", "admin_rejected"]:
         # Get showtime info for email
-        booking_detail = get_booking_by_id(booking_id)
-        showtime_layout = get_showtime_layout(booking_detail['showtime_id']) if booking_detail else None
+        showtime_layout = get_showtime_layout(booking['showtime_id']) if booking else None
         
         if status == "approved" and showtime_layout:
             subject = f"🎬 Booking Confirmed - #{booking_id}"
@@ -782,11 +854,82 @@ def update_booking_status_endpoint(booking_id: int, status: str, admin: dict = D
             """
         # Remove cancelled status handling since we use admin_rejected
         
-        send_email(booking['customer_email'], subject, body)
+        admin_email = os.getenv('ADMIN_EMAIL', 'justinmathewbiji@gmail.com')
+        send_email(booking['customer_email'], subject, body, admin_email)
+
+# Call email notification after status update
+    send_status_change_email(booking_id, status, old_status)
+
+@app.post("/booking/{booking_id}/resend-email")
+@app.post("/api/booking/{booking_id}/resend-email")
+def resend_confirmation_email(booking_id: int, admin: dict = Depends(get_current_admin)):
+    booking = get_booking_by_id(booking_id)
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
     
-    return {"message": f"Booking status updated from {old_status} to {status}"}
+    if booking["status"] != "approved":
+        raise HTTPException(status_code=400, detail="Can only resend confirmation for approved bookings")
+    
+    # Get showtime info for email
+    showtime_layout = get_showtime_layout(booking['showtime_id'])
+    
+    # Get admin email (same pattern as OTP verification)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT admin_email FROM admin_settings ORDER BY id DESC LIMIT 1")
+        result = cursor.fetchone()
+        admin_email = result['admin_email'] if result else os.getenv('ADMIN_EMAIL', 'keralasamajam.indonesia@gmail.com')
+        cursor.close()
+        conn.close()
+    except:
+        admin_email = os.getenv('ADMIN_EMAIL', 'keralasamajam.indonesia@gmail.com')
+    
+    if not showtime_layout:
+        raise HTTPException(status_code=404, detail="Showtime information not found")
+    
+    subject = f"Booking Confirmed - Reference {booking_id}"
+    body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Booking Confirmed</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+            <h2 style="color: #155724; margin-top: 0;">Booking Confirmed</h2>
+            <p>Dear {booking['customer_name']},</p>
+            <p>Your movie booking has been confirmed.</p>
+        </div>
+        
+        <div style="background: #ffffff; border: 1px solid #dee2e6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #495057; margin-top: 0;">Your Ticket Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Booking Reference:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{booking_id}</td></tr>
+                <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Movie:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{showtime_layout['movie']}</td></tr>
+                <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Cinema:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{showtime_layout['theater']}</td></tr>
+                <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Show Date:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{showtime_layout['show_date']}</td></tr>
+                <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Show Time:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{showtime_layout['showtime']}</td></tr>
+                <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Seat Numbers:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{', '.join(booking['seats'])}</td></tr>
+                <tr><td style="padding: 8px 0;"><strong>Total Paid:</strong></td><td style="padding: 8px 0;">Rp {booking['total_amount']:,}</td></tr>
+            </table>
+        </div>
+        
+        <p>Thank you for choosing Bamboo Holiday Movies. Enjoy your movie experience!</p>
+    </body>
+    </html>
+    """
+    
+    logger.info(f"Resending confirmation email for booking {booking_id} to {booking['customer_email']} with admin CC: {admin_email}")
+    
+    if send_email(booking['customer_email'], subject, body, admin_email):
+        return {"message": "Confirmation email resent successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to resend confirmation email")
 
 @app.get("/bookings/stats")
+@app.get("/api/bookings/stats")
 def get_booking_stats(admin: dict = Depends(get_current_admin)):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -802,14 +945,34 @@ def get_booking_stats(admin: dict = Depends(get_current_admin)):
     return {stat['status']: stat['count'] for stat in stats}
 
 @app.get("/analytics")
+@app.get("/api/analytics")
 def get_analytics_endpoint():
     analytics = get_analytics()
     
-    # Calculate occupancy rate
-    total_seats = 11 * (8 + 6)  # 11 rows * 14 seats
-    bookings_data = get_all_bookings()
-    occupied_seats = sum(len(b["seats"]) for b in bookings_data if b["status"] in ["confirmed", "approved"])
-    occupancy_rate = (occupied_seats / total_seats) * 100
+    # Calculate occupancy rate considering disabled seats
+    confirmed_seats = analytics.get('confirmed_bookings', 0)
+    
+    # Get total available seats across all active showtimes (excluding disabled seats)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_shows,
+            COALESCE(SUM(array_length(t.non_selectable_seats, 1)), 0) as total_disabled_seats
+        FROM showtimes s
+        JOIN theaters t ON s.theater_id = t.id
+        WHERE s.is_active = TRUE
+    """)
+    result = cursor.fetchone()
+    total_shows = result['total_shows'] if result else 0
+    total_disabled_seats = result['total_disabled_seats'] if result else 0
+    cursor.close()
+    conn.close()
+    
+    # Calculate available seats (154 per theater minus disabled seats)
+    seats_per_theater = 154
+    total_available_seats = (total_shows * seats_per_theater) - total_disabled_seats
+    occupancy_rate = (confirmed_seats / total_available_seats * 100) if total_available_seats > 0 else 0
     
     return {
         **analytics,
@@ -823,6 +986,7 @@ def download_ticket(booking_id: int):
 
 # Admin management endpoints
 @app.get("/admin/movies")
+@app.get("/api/admin/movies")
 def get_movies():
     return get_all_movies()
 
@@ -831,6 +995,7 @@ def test_endpoint():
     return {"message": "Test endpoint working"}
 
 @app.post("/admin/movies")
+@app.post("/api/admin/movies")
 def create_movie_endpoint(movie: MovieCreate):
     movie_id = create_movie(
         movie.title, movie.poster_url, movie.duration_minutes,
@@ -864,10 +1029,12 @@ def delete_movie_endpoint(movie_id: int):
     return {"message": "Movie deleted successfully"}
 
 @app.get("/admin/theaters")
+@app.get("/api/admin/theaters")
 def get_theaters():
     return get_all_theaters()
 
 @app.post("/admin/theaters")
+@app.post("/api/admin/theaters")
 def create_theater_endpoint(theater: TheaterCreate):
     theater_id = create_theater(
         theater.name, theater.address, theater.rows,
@@ -901,10 +1068,12 @@ def delete_theater(theater_id: int):
     return {"message": "Theater deleted successfully"}
 
 @app.get("/admin/showtimes")
+@app.get("/api/admin/showtimes")
 def get_admin_showtimes():
     return get_all_showtimes()
 
 @app.post("/admin/showtimes")
+@app.post("/api/admin/showtimes")
 def create_showtime_endpoint(showtime: ShowtimeCreate):
     showtime_id = create_showtime(
         showtime.movie_id, showtime.theater_id,
@@ -924,6 +1093,7 @@ def delete_showtime(showtime_id: int):
 
 # Admin settings endpoints
 @app.get("/admin/settings")
+@app.get("/api/admin/settings")
 def get_admin_settings_endpoint():
     """Get admin settings"""
     settings = get_admin_settings()
@@ -939,6 +1109,7 @@ def get_admin_settings_endpoint():
         }
 
 @app.put("/admin/settings")
+@app.put("/api/admin/settings")
 def update_admin_settings_endpoint(settings: AdminSettingsUpdate):
     """Update admin settings"""
     update_admin_settings(
@@ -949,9 +1120,10 @@ def update_admin_settings_endpoint(settings: AdminSettingsUpdate):
     
     return {"message": "Admin settings updated successfully"}
 
-# Serve React static files at the end
-if os.path.exists("static"):
-    app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# Serve React static files at the end - only for production
+# Comment this out for development to avoid conflicts with API routes
+# if os.path.exists("static"):
+#     app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
