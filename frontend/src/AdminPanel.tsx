@@ -204,7 +204,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
   if (loading) return <div>Loading bookings...</div>;
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: '20px', maxWidth: '95vw', margin: '0 auto' }}>
       {toast && (
         <div style={{
           position: 'fixed',
@@ -326,20 +326,20 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
       </div>
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd' }}>
+        <table style={{ width: '100%', minWidth: '1400px', borderCollapse: 'collapse', border: '1px solid #ddd' }}>
           <thead>
             <tr style={{ backgroundColor: '#f5f5f5' }}>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>ID</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Movie/Theater</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Customer</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Contact</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Seats</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Amount</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Status</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Date</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Payment Proof</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Actions</th>
-              <th style={{ padding: '12px', border: '1px solid #ddd' }}>Resend Email</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '60px' }}>ID</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '200px' }}>Movie/Theater</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '150px' }}>Customer</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '180px' }}>Contact</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '120px' }}>Seats</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '100px' }}>Amount</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '120px' }}>Status</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '140px' }}>Date</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '120px' }}>Payment Proof</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '150px' }}>Actions</th>
+              <th style={{ padding: '12px', border: '1px solid #ddd', width: '120px' }}>Resend Email</th>
             </tr>
           </thead>
           <tbody>
