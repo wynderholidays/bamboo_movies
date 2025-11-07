@@ -5,4 +5,4 @@ __pycache__/
 uploads/
 .DS_Store
 venv/
-logs/
+backend/logs/

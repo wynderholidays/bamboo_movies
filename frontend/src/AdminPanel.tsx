@@ -125,7 +125,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
       });
       
       if (response.ok) {
-        fetchBookings();
+        fetchBookings(statusFilter);
         showToast(`Booking ${bookingId} ${status} successfully`, 'success');
         setActionModal(null);
         setAdminRemarks('');
@@ -524,12 +524,7 @@ const AdminPanel: React.FC<Props> = ({ navigate }) => {
                 style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
               >
                 <option value="">Select Action...</option>
-                <option value="pending_payment">Set to Pending Payment</option>
-                <option value="pending_verification">Set to Pending Verification</option>
-                <option value="pending_approval">Set to Pending Approval</option>
                 <option value="approved">Approve Booking</option>
-                <option value="confirmed">Confirm Booking</option>
-                <option value="admin_rejected">Reject Booking</option>
                 <option value="cancelled">Cancel Booking</option>
               </select>
             </div>
