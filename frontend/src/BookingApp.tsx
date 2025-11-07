@@ -53,6 +53,7 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
   const [userId] = useState(() => Math.random().toString(36).substr(2, 9));
+  const [seatConflictDialog, setSeatConflictDialog] = useState<{show: boolean, conflictSeats: string[]}>({show: false, conflictSeats: []});
 
   const showToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
     setToast({message, type});
@@ -223,6 +224,40 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     }
   };
 
+  const validateSeatsAvailability = async () => {
+    try {
+      const response = await fetch(`/api/showtime/${selectedShowtimeId}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        const allBookedSeats = [
+          ...(data.pending_payment_seats || []),
+          ...(data.pending_approval_seats || []),
+          ...(data.approved_seats || []),
+          ...(data.confirmed_seats || [])
+        ];
+        
+        const conflictSeats = selectedSeats.filter(seat => allBookedSeats.includes(seat));
+        return conflictSeats;
+      }
+      return [];
+    } catch (error) {
+      console.error('Seat validation error:', error);
+      return [];
+    }
+  };
+
+  const handleSeatConflictResponse = (shouldRefresh: boolean) => {
+    setSeatConflictDialog({show: false, conflictSeats: []});
+    
+    if (shouldRefresh) {
+      setSelectedSeats([]);
+      setCustomerInfo({name: '', email: '', phone: ''});
+      if (selectedShowtimeId) fetchTheaterInfo(selectedShowtimeId);
+      showToast('Selections cleared and theater refreshed', 'info');
+    }
+  };
+
   const handleConfirmBooking = async () => {
     if (!customerInfo.name || !customerInfo.email || !customerInfo.phone || selectedSeats.length === 0) {
       showToast('Please fill all details and select seats', 'error');
@@ -238,6 +273,14 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
     const phoneRegex = /^\+?[1-9]\d{1,14}$/;
     if (!phoneRegex.test(customerInfo.phone)) {
       showToast('Please enter a valid phone number with country code (e.g., +1234567890)', 'error');
+      return;
+    }
+
+    // Validate seat availability before booking
+    const conflictSeats = await validateSeatsAvailability();
+    
+    if (conflictSeats.length > 0) {
+      setSeatConflictDialog({show: true, conflictSeats});
       return;
     }
 
@@ -506,7 +549,27 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
                   cursor: isBooking ? 'not-allowed' : 'pointer'
                 }}
               >
-                {isBooking ? 'Processing...' : 'Confirm Booking'}
+                {isBooking ? 'Validating & Processing...' : 'Confirm Booking'}
+              </button>
+              
+              <button 
+                onClick={() => {
+                  setSelectedSeats([]);
+                  setCustomerInfo({name: '', email: '', phone: ''});
+                  if (selectedShowtimeId) fetchTheaterInfo(selectedShowtimeId);
+                  showToast('Selections cleared and theater refreshed', 'info');
+                }}
+                style={{
+                  marginTop: '10px',
+                  background: '#f0f0f0',
+                  color: '#333',
+                  border: '1px solid #ddd',
+                  padding: '10px 20px',
+                  borderRadius: '5px',
+                  cursor: 'pointer'
+                }}
+              >
+                🔄 Refresh & Clear Selections
               </button>
             </div>
           )}
@@ -635,6 +698,81 @@ const BookingApp: React.FC<Props> = ({ navigate, currentRoute, selectedShowtimeI
         </div>
       ) : (
         <div>Page not found</div>
+      )}
+      
+      {seatConflictDialog.show && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '30px',
+            borderRadius: '15px',
+            maxWidth: '500px',
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+          }}>
+            <h3 style={{color: '#f44336', marginTop: 0}}>⚠️ Seat Conflict Detected</h3>
+            <p style={{fontSize: '16px', margin: '20px 0'}}>
+              The following seats are no longer available:
+            </p>
+            <div style={{
+              background: '#ffebee',
+              padding: '15px',
+              borderRadius: '8px',
+              margin: '20px 0',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              color: '#c62828'
+            }}>
+              {seatConflictDialog.conflictSeats.join(', ')}
+            </div>
+            <p style={{fontSize: '14px', color: '#666', margin: '20px 0'}}>
+              Someone else has already booked these seats. Would you like to refresh and choose different seats?
+            </p>
+            
+            <div style={{display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '25px'}}>
+              <button 
+                onClick={() => handleSeatConflictResponse(false)}
+                style={{
+                  padding: '12px 24px',
+                  background: '#f0f0f0',
+                  color: '#333',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleSeatConflictResponse(true)}
+                style={{
+                  padding: '12px 24px',
+                  background: '#2196F3',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
+              >
+                Yes, Refresh & Choose Again
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
